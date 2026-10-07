@@ -211,6 +211,11 @@ import 'https://cdn.jsdelivr.net/gh/ninin99537-commits/DaoYan@master/dist/剧情
 > ⚠️ 注意这个仓库的布局：源码在 `Source/` 下（`Source/src/剧情导演`、`Source/src/共用`），
 > 但**对外发布的 `dist/剧情导演/` 在仓库根目录**，两者不是同一路径——构建/上传前先分清。
 > 仓库没有 CI 会自动重建，所以每次改动都必须**手动重新构建并提交 dist**，否则用户拉不到最新版。
+>
+> ✅ 该仓库此前缺三件套会导致「拉下来装不起来」，已补上（2026-10-07）：`Source/pnpm-workspace.yaml`
+> （pnpm-v11 的 allowBuilds，不然 install/build 因 ignored build scripts 直接失败）、
+> `Source/tests/build.mjs`、`Source/tests/platform-usage.mjs`（按 Source 布局只扫 剧情导演/共用）。
+> 现在删除后重新 clone → `pnpm install` → `pnpm test` → `pnpm build` 全部可用。
 
 ## 更新日志
 
