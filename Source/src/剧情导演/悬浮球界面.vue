@@ -557,16 +557,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { 取根变量 } from './主题';
 import { useSettingsStore, 立即保存设置 } from './settings';
-import {
-  useConsoleStore, useDeathStore, useDebugStore, useStateStore, useUpdatingStore,
-  saveData, clearAllData, 读离线状态, 清推进失败, 设自动暂停, 写已剧终, 熔断阈值,
-} from './state';
+
 import { build本幕指令 } from './prompts';
 import { 档位标准, 跳过本幕 as 跳过本幕规则 } from './引擎规则';
 import { fetchModelList, 诊断接口配置, 测试连接, type 测试连接结果 } from './api';
 import { 计算判据, 终值日志行 } from './指标';
 import { 章回受管, 章回键, 伏笔受管, 伏笔键, 切换揭开, 折叠中, 折叠文案, 揭开提示 } from './防剧透';
 import { 落定剧终, 解除剧终, 请求收官 } from './快照';
+import { 是终态 } from './字段表';
+import { 提交账本变更 } from './账本变更';
 import { 计算球状态, 球悬停文案 } from './球状态';
 import { 显示气泡, 藏气泡 } from './球气泡';
 import { 设提示档位, 提示档列表, toastSuccess } from './toast';
@@ -602,7 +601,7 @@ const 副标题 = computed(() => {
   const 节拍 = 账本.value.当前指令?.节拍;
   return `${节拍 ? '本幕 ' + 节拍 : '待命'} · 张力 ${t}/10`;
 });
-const 活跃冲突 = computed(() => (账本.value.冲突 ?? []).filter(c => c.阶段 !== '已收档'));
+const 活跃冲突 = computed(() => (账本.value.冲突 ?? []).filter(c => !是终态.冲突(c)));
 /**
  * 防剧透(规格 A): **两个独立开关** + **整行点击临时揭开**。
  * 折叠只发生在"渲染哪段文案"这一层 —— 账本里 `伏笔[].内容`、`章回.计划高潮` 一个字都不少,
@@ -812,8 +811,7 @@ function 加红线() {
 function 跳过本幕() {
   if (!账本.value.当前指令) return;
   跳过本幕规则(账本.value);
-  saveData(账本.value);
-  renew本幕指令(账本.value, 设置.value, !!账本.value.待决死亡);
+  提交账本变更(账本.value, 设置.value, { 重注本幕: !!账本.value.待决死亡 });
   console.info('[剧情导演] 用户跳过本幕');
 }
 async function 手动推进() {
@@ -850,9 +848,8 @@ function 做死亡抉择(项: 死亡抉择) {
   }
   账本.value.死亡抉择 = 项;
   deathStore.settle();
-  saveData(账本.value);
   // 抉择交给下一轮引擎消费(据此分向编排); 消费前仍暂停注入
-  renew本幕指令(账本.value, 设置.value, true);
+  提交账本变更(账本.value, 设置.value, { 重注本幕: true });
   console.info(`[剧情导演] 死亡抉择：${项}(待下一轮引擎消费)`);
 }
 /**
@@ -872,8 +869,8 @@ function 做全书结算() {
     console.info('[剧情导演] 收官请求已存在或已剧终, 忽略重复点击(不产生第二道收束幕)');
     return;
   }
-  if (!saveData(账本.value)) console.warn('[剧情导演] 收官请求落盘失败(内存里仍生效, 但删楼回退会丢)');
-  renew本幕指令(账本.value, 设置.value, !!账本.value.待决死亡);
+  if (!提交账本变更(账本.value, 设置.value, { 重注本幕: !!账本.value.待决死亡 }))
+    console.warn('[剧情导演] 收官请求落盘失败(内存里仍生效, 但删楼回退会丢)');
   console.info('[剧情导演] 用户请求全书结算：下一道指令将编排为收束幕(演完后由你在账本页确认落幕)');
   toastSuccess('剧情导演: 已请求全书结算——下一道指令改为收束幕（回收剩余伏笔、收束主线）；演完这一幕后请在账本页点「确认剧终」', '剧情导演');
 }
@@ -885,20 +882,17 @@ function 确认剧终() {
   落定剧终(账本.value); // 已剧终 + 清 收官请求 + 判据快照写进 指标.终值(纯函数, 见 快照.ts)
   deathStore.settle();
   写已剧终(true);
-  if (!saveData(账本.value)) console.warn('[剧情导演] 剧终落盘失败(楼层写不进去), chat meta 侧仍已标记已剧终');
   // 成绩单同时写一行进日志页: 将来「清除已剧终」把 终值 清空了, 用户仍能在日志里回看(dsh 补充)
   console.info(`[剧情导演] ${终值日志行(账本.value.指标?.终值)}`);
-  sync编剧备忘(账本.value, false, 设置.value);
-  renew本幕指令(账本.value, 设置.value, true);
+  if (!提交账本变更(账本.value, 设置.value, { 重写备忘: false, 重注本幕: true }))
+    console.warn('[剧情导演] 剧终落盘失败(楼层写不进去), chat meta 侧仍已标记已剧终');
   console.info('[剧情导演] 剧终结算: 已停引擎(账本 + chat meta 双写)');
 }
 /** F 面板出口: 清除已剧终(两边都清), 自动路径恢复。规格 B4: **连 收官请求 与 终值 一起清**, 否则会一直出收束幕 */
 function 清除剧终() {
   解除剧终(账本.value);
   写已剧终(false);
-  saveData(账本.value);
-  sync编剧备忘(账本.value, 设置.value.导演.注入世界书条目, 设置.value);
-  renew本幕指令(账本.value, 设置.value, false);
+  提交账本变更(账本.value, 设置.value, { 重写备忘: 设置.value.导演.注入世界书条目, 重注本幕: false });
   console.info('[剧情导演] 已清除「已剧终」(含收官请求与结算快照), 自动路径恢复');
 }
 /** I 手动恢复自动接管(连败计数清零、解除暂停) */
@@ -927,23 +921,21 @@ function 改伏笔状态(编号: number, 值: string) {
   const 条 = 账本.value.伏笔.find(item => item.编号 === 编号);
   if (!条) return;
   条.状态 = 值 as 伏笔状态;
-  saveData(账本.value);
-  sync编剧备忘(账本.value, 设置.value.导演.注入世界书条目, 设置.value);
+  提交账本变更(账本.value, 设置.value, { 重写备忘: 设置.value.导演.注入世界书条目 });
   console.info(`[剧情导演] 修笔：伏笔 #${编号} → ${值}`);
 }
 function 改冲突阶段(名: string, 值: string) {
   const 条 = 账本.value.冲突.find(item => item.名 === 名);
   if (!条) return;
   条.阶段 = 值 as 冲突阶段;
-  saveData(账本.value);
-  sync编剧备忘(账本.value, 设置.value.导演.注入世界书条目, 设置.value);
+  提交账本变更(账本.value, 设置.value, { 重写备忘: 设置.value.导演.注入世界书条目 });
   console.info(`[剧情导演] 修笔：冲突「${名}」→ ${值}`);
 }
 function 改弧线阶段(角色: string, 值: string) {
   const 条 = 账本.value.弧线.find(item => item.角色 === 角色);
   if (!条) return;
   条.阶段 = 值;
-  saveData(账本.value);
+  提交账本变更(账本.value, 设置.value);
   console.info(`[剧情导演] 修笔：弧线「${角色}」→ ${值}`);
 }
 async function 复制报错() {

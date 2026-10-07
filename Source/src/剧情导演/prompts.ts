@@ -1,7 +1,7 @@
 import referenceText from './gemini37f_reference.txt?raw';
 import doupoText from './gemini37f_doupo.txt?raw';
 import type { 导演账本, Settings } from './schema';
-import { 伏笔上限, 冲突上限, 弧线上限, 节拍枚举 } from './字段表';
+import { 伏笔上限, 冲突上限, 弧线上限, 节拍枚举, 是终态 } from './字段表';
 import { 弧线阶段列表 } from './schema';
 import { 档位标准 } from './引擎规则';
 
@@ -156,21 +156,21 @@ export function buildInjectionPrompt(账本: 导演账本): string {
   if (章回) {
     lines.push(`【章回】第 ${章回.章号} 章《${章回.主题}》｜进度：${章回.进度}｜计划高潮：${章回.计划高潮 || '(未定)'}`);
   }
-  const 活跃冲突 = (账本.冲突 ?? []).filter(item => item.阶段 !== '已收档');
+  const 活跃冲突 = (账本.冲突 ?? []).filter(item => !是终态.冲突(item));
   if (活跃冲突.length > 0) {
     lines.push('【活跃冲突】');
     for (const 冲突 of 活跃冲突) {
       lines.push(`- ${冲突.名}(对立面：${冲突.对立面 || '—'})｜赌注：${冲突.赌注 || '—'}｜强度：${冲突.强度}/10｜阶段：${冲突.阶段}｜下一步：${冲突.下一步 || '—'}`);
     }
   }
-  const 活跃伏笔 = (账本.伏笔 ?? []).filter(item => item.状态 !== '已引爆' && item.状态 !== '已消亡');
+  const 活跃伏笔 = (账本.伏笔 ?? []).filter(item => !是终态.伏笔(item));
   if (活跃伏笔.length > 0) {
     lines.push('【伏笔登记】(编号是引用用的, 不要复述本表, 按编号推进即可)');
     for (const 伏笔 of 活跃伏笔) {
       lines.push(`- #${伏笔.编号} [${伏笔.状态}] ${伏笔.内容}（回收窗口：${伏笔.回收窗口 || '—'}${伏笔.关联冲突 ? `；关联冲突：${伏笔.关联冲突}` : ''}）`);
     }
   }
-  const 活跃弧线 = (账本.弧线 ?? []).filter(item => item.阶段 !== '闭环');
+  const 活跃弧线 = (账本.弧线 ?? []).filter(item => !是终态.弧线(item));
   if (活跃弧线.length > 0) {
     lines.push('【角色弧线】');
     for (const 弧线 of 活跃弧线) {

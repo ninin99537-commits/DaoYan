@@ -14,6 +14,7 @@
 //   分子凭空多、分母不动, 求和再相除必然 >100%。**回收率必须是同一批伏笔的队列比**,
 //   所以另立一对**单调递增、按编号去重**的累计计数器, 只做比值用。
 import { klona } from 'klona';
+import { 是终态 } from './字段表';
 import type { 导演账本, 指标账, 章节统计, 节拍, 判据, 伏笔 } from './schema';
 import type { 核验结果 } from './引擎规则';
 
@@ -94,9 +95,9 @@ function 读计数器(值: unknown): number | null {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : null;
 }
 
-/** 伏笔是否已了结(引爆或明确消亡都算) */
+/** 伏笔是否已了结(引爆或明确消亡都算) —— 口径就是 字段表 里伏笔层的「终态」, 不另写一份 */
 function 是了结状态(状态: unknown): boolean {
-  return 状态 === '已引爆' || 状态 === '已消亡';
+  return 是终态.伏笔({ 状态 });
 }
 
 /** 从变化串里取伏笔编号: `#3 埋设→已引爆` / `新增 #5 内容` */
