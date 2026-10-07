@@ -557,6 +557,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { 取根变量 } from './主题';
 import { useSettingsStore, 立即保存设置 } from './settings';
+import {
+  useConsoleStore, useDeathStore, useDebugStore, useStateStore, useUpdatingStore,
+  clearAllData, 读离线状态, 清推进失败, 设自动暂停, 写已剧终, 熔断阈值,
+} from './state';
 
 import { build本幕指令 } from './prompts';
 import { 档位标准, 跳过本幕 as 跳过本幕规则 } from './引擎规则';
