@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>剧情导演 · 面板风格对比（三方向）</title>
+<style>
+  /* ============ 舞台 ============ */
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:#0c0d10;
+    background-image:radial-gradient(1200px 600px at 20% 0%, #171a21 0%, #0c0d10 60%);
+    font-family:system-ui,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+    color:#cfd3da;padding:28px 32px 40px;
+  }
+  .stage{display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap}
+  figure{margin:0;display:flex;flex-direction:column;gap:10px}
+  figcaption{font-size:12px;line-height:1.5;color:#8b929e;max-width:522px}
+  figcaption b{color:#e6e9ee;font-size:13px;display:block;margin-bottom:3px}
+  figcaption code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:11px;color:#9aa3b0}
+
+  /* ============ 面板骨架（三套风格共用结构） ============ */
+  .panel{
+    width:522px;height:628px;border-radius:var(--r-panel);
+    background:var(--panel);border:1px solid var(--line);
+    box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;
+    color:var(--ink);font-size:12.5px;line-height:1.55;position:relative;
+  }
+  .head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--raise)}
+  .title{font-family:var(--display);font-size:15.5px;letter-spacing:.2px;color:var(--ink-strong)}
+  .sub{color:var(--ink-faint);font-size:11px;flex:1}
+  .iconbtn{background:none;border:none;color:var(--ink-dim);cursor:pointer;display:inline-flex;align-items:center;padding:2px}
+  .tabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--raise)}
+  .tabs button{
+    background:none;border:none;color:var(--ink-dim);padding:7px 12px 8px;cursor:pointer;
+    font-size:12.5px;font-family:inherit;position:relative;transition:color .15s var(--ease)
+  }
+  .tabs button.on{color:var(--ink-strong)}
+  .tabs button.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px 2px 0 0}
+  .tabs .spacer{flex:1}
+  .body{padding:12px 14px 16px;display:flex;flex-direction:column;gap:11px;overflow:hidden}
+
+  /* 状态条 */
+  .status{
+    display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r-sm);
+    background:var(--status-bg);border:1px solid var(--line);border-left:3px solid var(--status-edge);
+    font-size:11.5px;color:var(--ink)
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--status-edge);flex:none}
+  .status .lv{color:var(--status-edge);font-weight:600}
+  .status .sep{color:var(--ink-ghost)}
+
+  /* 指标卡 */
+  .card{background:var(--raise);border:1px solid var(--line);border-radius:var(--r-card);padding:10px 12px}
+  .card-h{display:flex;align-items:center;gap:7px;color:var(--ink-dim);font-size:11px;margin-bottom:8px}
+  .card-h .k{color:var(--ink-ghost)}
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .metric{display:flex;flex-direction:column;gap:1px}
+  .metric .v{font-size:15px;font-weight:650;letter-spacing:-.2px;color:var(--ink-strong);font-variant-numeric:tabular-nums;font-family:var(--num)}
+  .metric .l{font-size:10px;color:var(--ink-ghost);letter-spacing:.2px}
+  .metric .u{font-size:10px;color:var(--ink-faint);font-weight:400}
+
+  /* 张力 + 波形 */
+  .tension{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line-soft)}
+  .tension .tv{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink)}
+  .beat{padding:1px 7px;border-radius:var(--r-pill);background:var(--chip-bg);color:var(--ink-dim);font-size:10.5px;border:1px solid var(--line)}
+  .spark{margin-left:auto;display:flex;align-items:flex-end;gap:2px;height:26px}
+  .spark i{display:block;width:5px;border-radius:1px 1px 0 0;background:var(--spark)}
+
+  /* 指令预览 */
+  .pre{
+    white-space:pre-wrap;word-break:break-word;background:var(--well);border:1px solid var(--line);
+    border-radius:var(--r-sm);padding:9px 10px;font-size:12px;color:var(--ink);max-height:132px;overflow:hidden;
+    font-family:var(--body)
+  }
+  .pre .cmd{color:var(--accent-text);font-weight:600}
+  .btnrow{display:flex;gap:7px;margin-top:1px}
+  .btn{
+    background:var(--btn-bg);color:var(--ink);border:1px solid var(--line-strong);border-radius:var(--r-btn);
+    padding:5px 10px;cursor:pointer;font-size:11.5px;font-family:inherit;display:inline-flex;align-items:center;gap:5px;
+    transition:background .15s var(--ease),border-color .15s var(--ease)
+  }
+  .btn.danger{border-color:var(--danger);color:var(--danger)}
+  .row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim)}
+  .tag{display:inline-block;padding:0 6px;border-radius:var(--r-pill);background:var(--chip-bg);color:var(--ink-dim);font-size:10.5px;border:1px solid var(--line)}
+  .tag.warn{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg)}
+  .empty{color:var(--ink-ghost);font-size:11.5px;padding:6px 0;display:flex;align-items:center;gap:6px}
+  .err{color:var(--danger);font-size:11.5px;display:flex;align-items:center;gap:6px}
+  .fig{display:flex;gap:14px;color:var(--ink-faint);font-size:11px}
+  .nicebar{height:5px;border-radius:3px;background:var(--well);overflow:hidden;margin-top:7px}
+  .nicebar i{display:block;height:100%;width:78%;background:var(--meter)}
+
+  /* ============ A · 舰桥仪表（深蓝黑 + 冷青仪表光 + 等宽数字 + 极简方角） ============ */
+  .sA{
+    --bg:#0b0f14; --panel:#101821; --raise:#141d28; --well:#0c131a; --hover:#1a2430;
+    --line:#1e2a36; --line-soft:#182230; --line-strong:#2b3b4b;
+    --ink:#cfe0ea; --ink-strong:#eaf4fa; --ink-dim:#8ea6b6; --ink-faint:#6b8194; --ink-ghost:#54697a;
+    --accent:#4fd1c5; --accent-text:#7fe3d9; --chip-bg:#16222c; --meter:linear-gradient(90deg,#2c6f77,#4fd1c5,#9be8df);
+    --warn:#e3b341; --warn-bg:#241f12; --warn-line:#4a3d18; --danger:#f2708a; --spark:linear-gradient(180deg,#4fd1c5,#2b7f86);
+    --status-bg:#0f1a22; --status-edge:#4fd1c5;
+    --r-panel:6px; --r-card:4px; --r-sm:3px; --r-btn:4px; --r-pill:3px;
+    --shadow:0 20px 44px rgba(0,0,0,.55), 0 0 0 1px rgba(79,209,197,.06);
+    --display:var(--body); --num:ui-monospace,"Cascadia Mono",Consolas,monospace; --ease:cubic-bezier(.2,.7,.3,1);
+  }
+  .sA .card-h .k{font-family:var(--num)}
+  .sA .panel::before{ /* 淡淡的扫描网格：只做纹理，不抢内容 */
+    content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;
+    background-image:linear-gradient(rgba(79,209,197,.045) 1px,transparent 1px);
+    background-size:100% 3px;
+  }
+
+  /* ============ B · 剧本批注（暖墨灰 + 唯一的朱红 + 衬线标题 + 边栏红线） ============ */
+  .sB{
+    --bg:#141210; --panel:#1b1815; --raise:#211d19; --well:#171412; --hover:#282320;
+    --line:#2f2a24; --line-soft:#282320; --line-strong:#403830;
+    --ink:#e6ded2; --ink-strong:#f4ece0; --ink-dim:#b3a795; --ink-faint:#8b7f6f; --ink-ghost:#6d6355;
+    --accent:#e2493a; --accent-text:#ef6a5b; --chip-bg:#241f1b; --meter:linear-gradient(90deg,#8c6a2f,#d9a441,#e2493a);
+    --warn:#d9a441; --warn-bg:#241d14; --warn-line:#4a3a1e; --danger:#e2493a; --spark:linear-gradient(180deg,#d9a441,#e2493a);
+    --status-bg:#1e1a17; --status-edge:#e2493a;
+    --r-panel:2px; --r-card:2px; --r-sm:2px; --r-btn:2px; --r-pill:2px;
+    --shadow:0 22px 50px rgba(0,0,0,.6);
+    --display:"Source Han Serif SC","Noto Serif SC","SimSun",serif; --num:var(--body); --ease:ease;
+  }
+  .sB .title{font-size:17px;letter-spacing:.5px}
+  .sB .tabs button.on::after{background:var(--accent);left:0;right:0}
+  .sB .card{border-left:2px solid var(--line-strong)}
+  .sB .card-h::before{content:"§";color:var(--accent);font-family:var(--display);margin-right:2px}
+  .sB .pre{font-family:var(--display);font-size:12.5px;line-height:1.75;border-left:2px solid var(--accent);background:var(--well)}
+  .sB .metric .v{font-size:16px;font-weight:600}
+
+  /* ============ C · 深空遥测（紫靛黑 + 双色强调 + 点阵密度 + 微光） ============ */
+  .sC{
+    --bg:#0b0912; --panel:#12101c; --raise:#181527; --well:#0e0c17; --hover:#221d33;
+    --line:#262040; --line-soft:#1e1935; --line-strong:#3a3160;
+    --ink:#d8d4ea; --ink-strong:#f0edfb; --ink-dim:#9d97bd; --ink-faint:#7a749b; --ink-ghost:#615c80;
+    --accent:#a78bfa; --accent-text:#c4b1ff; --chip-bg:#1c1830; --meter:linear-gradient(90deg,#5b46a8,#a78bfa,#7ef0c0);
+    --warn:#f2c14e; --warn-bg:#251f12; --warn-line:#4d4020; --danger:#ff6b8b; --spark:linear-gradient(180deg,#a78bfa,#5b46a8);
+    --status-bg:#171327; --status-edge:#a78bfa;
+    --r-panel:10px; --r-card:8px; --r-sm:6px; --r-btn:6px; --r-pill:999px;
+    --shadow:0 24px 60px rgba(0,0,0,.6), 0 0 40px rgba(167,139,250,.08);
+    --display:var(--body); --num:ui-monospace,"Cascadia Mono",Consolas,monospace; --ease:cubic-bezier(.22,1,.36,1);
+  }
+  .sC .metrics{grid-template-columns:repeat(5,1fr);gap:4px}
+  .sC .metric{padding:6px 4px;border-radius:6px;background:var(--well);border:1px solid var(--line-soft)}
+  .sC .metric .v{font-size:15px;color:var(--accent-text)}
+  .sC .panel::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.55}
+
+  /* 图标（内联 SVG，currentColor，零依赖） */
+  svg.i{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ================= A ================= -->
+  <figure class="sA">
+    <div class="panel">
+      <div class="head">
+        <span class="title">剧情导演</span>
+        <span class="sub">外部编剧 · 只读观测</span>
+        <button class="iconbtn"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="tabs">
+        <button class="on">本幕</button><button>账本</button><button>日志</button><button>设置</button>
+        <span class="spacer"></span>
+        <button title="主题"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg></button>
+      </div>
+      <div class="body">
+        <div class="status">
+          <span class="dot"></span>
+          <span class="lv">冷启动攒轮</span>
+          <span>第 1/3 轮</span><span class="sep">·</span><span>第 4 轮起编排本幕</span>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 3 4-6"/></svg>判据 <span class="k">· 只读指标账</span></div>
+          <div class="metrics">
+            <div class="metric"><span class="v">77.8<span class="u">%</span></span><span class="l">伏笔回收率</span></div>
+            <div class="metric"><span class="v">5<span class="u">/0</span></span><span class="l">张力峰/谷</span></div>
+            <div class="metric"><span class="v">12</span><span class="l">冲突推进</span></div>
+            <div class="metric"><span class="v">1</span><span class="l">受挫次数</span></div>
+            <div class="metric"><span class="v">91.7<span class="u">%</span></span><span class="l">指令执行率</span></div>
+          </div>
+          <div class="nicebar"><i></i></div>
+          <div class="tension">
+            <span class="tv">5/10</span>
+            <span class="beat">兑现伏笔</span>
+            <span class="spark">
+              <i style="height:8px"></i><i style="height:5px"></i><i style="height:2px"></i><i style="height:9px"></i>
+              <i style="height:13px"></i><i style="height:22px"></i><i style="height:5px"></i><i style="height:13px"></i>
+              <i style="height:17px"></i><i style="height:22px"></i>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v12H4z"/><path d="M8 20h8M12 16v4"/></svg>当前指令预览 <span class="k">· #10</span></div>
+          <div class="pre"><span class="cmd">【余波 · 本轮必须落实】</span>
+1）先补上收束锚点：机载终端落下那行流程结算『接收完成·本机已列入记录』，不解释它是什么、不作任何总结。
+2）阵列进入完全静默：每次反向探测只得到死寂或一行『链路只读』；不许出现任何回执、任何新增数据。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 13l9 5 9-5"/></svg>活跃冲突</div>
+          <div class="row">碎石带深处的定点勘测 <span class="tag">收束</span> <span class="tag warn">强度 9/10</span></div>
+          <div class="fig" style="margin-top:5px"><span>伏笔 8 条</span><span>弧线 Lim · 挣扎</span><span>核验 11/12</span></div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>跳过本幕</button>
+          <button class="btn">重新推进</button>
+          <button class="btn danger">清空账本</button>
+        </div>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>尚无张力历史（推进一轮后出现）</div>
+        <div class="err"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>同步编剧备忘到世界书失败：主世界书不可读，已回退聊天世界书</div>
+      </div>
+    </div>
+    <figcaption><b>A · 舰桥仪表</b>深蓝黑中性色（hue 250）+ 冷青仪表光；等宽数字、方角（2–6px）、扫描线纹理；红色只留给剧终/危险。<br><code>气质：驾驶舱读数，配机甲/深空设定最贴</code></figcaption>
+  </figure>
+
+  <!-- ================= B ================= -->
+  <figure class="sB">
+    <div class="panel">
+      <div class="head">
+        <span class="title">剧情导演</span>
+        <span class="sub">外部编剧 · 只读观测</span>
+        <button class="iconbtn"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="tabs">
+        <button class="on">本幕</button><button>账本</button><button>日志</button><button>设置</button>
+        <span class="spacer"></span>
+        <button title="主题"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg></button>
+      </div>
+      <div class="body">
+        <div class="status">
+          <span class="dot"></span>
+          <span class="lv">冷启动攒轮</span>
+          <span>第 1/3 轮</span><span class="sep">·</span><span>第 4 轮起编排本幕</span>
+        </div>
+
+        <div class="card">
+          <div class="card-h">判据 <span class="k">· 只读指标账</span></div>
+          <div class="metrics">
+            <div class="metric"><span class="v">77.8<span class="u">%</span></span><span class="l">伏笔回收率</span></div>
+            <div class="metric"><span class="v">5<span class="u">/0</span></span><span class="l">张力峰/谷</span></div>
+            <div class="metric"><span class="v">12</span><span class="l">冲突推进</span></div>
+            <div class="metric"><span class="v">1</span><span class="l">受挫次数</span></div>
+            <div class="metric"><span class="v">91.7<span class="u">%</span></span><span class="l">指令执行率</span></div>
+          </div>
+          <div class="nicebar"><i></i></div>
+          <div class="tension">
+            <span class="tv">5/10</span>
+            <span class="beat">兑现伏笔</span>
+            <span class="spark">
+              <i style="height:8px"></i><i style="height:5px"></i><i style="height:2px"></i><i style="height:9px"></i>
+              <i style="height:13px"></i><i style="height:22px"></i><i style="height:5px"></i><i style="height:13px"></i>
+              <i style="height:17px"></i><i style="height:22px"></i>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">当前指令预览 <span class="k">· #10</span></div>
+          <div class="pre"><span class="cmd">【余波 · 本轮必须落实】</span>
+1）先补上收束锚点：机载终端落下那行流程结算『接收完成·本机已列入记录』，不解释它是什么、不作任何总结。
+2）阵列进入完全静默：每次反向探测只得到死寂或一行『链路只读』；不许出现任何回执、任何新增数据。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">活跃冲突</div>
+          <div class="row">碎石带深处的定点勘测 <span class="tag">收束</span> <span class="tag warn">强度 9/10</span></div>
+          <div class="fig" style="margin-top:5px"><span>伏笔 8 条</span><span>弧线 Lim · 挣扎</span><span>核验 11/12</span></div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>跳过本幕</button>
+          <button class="btn">重新推进</button>
+          <button class="btn danger">清空账本</button>
+        </div>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>尚无张力历史（推进一轮后出现）</div>
+        <div class="err"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>同步编剧备忘到世界书失败：主世界书不可读，已回退聊天世界书</div>
+      </div>
+    </div>
+    <figcaption><b>B · 剧本批注</b>暖墨灰中性色 + <b>唯一的朱红</b>（像编剧的红笔）；衬线标题、方角、指令块左红边线；不用阴影堆层次。<br><code>气质：纸面剧本 + 批注，与主 AI 的文风同调</code></figcaption>
+  </figure>
+
+  <!-- ================= C ================= -->
+  <figure class="sC">
+    <div class="panel">
+      <div class="head">
+        <span class="title">剧情导演</span>
+        <span class="sub">外部编剧 · 只读观测</span>
+        <button class="iconbtn"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="tabs">
+        <button class="on">本幕</button><button>账本</button><button>日志</button><button>设置</button>
+        <span class="spacer"></span>
+        <button title="主题"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg></button>
+      </div>
+      <div class="body">
+        <div class="status">
+          <span class="dot"></span>
+          <span class="lv">冷启动攒轮</span>
+          <span>第 1/3 轮</span><span class="sep">·</span><span>第 4 轮起编排本幕</span>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 3 4-6"/></svg>判据 <span class="k">· 只读指标账</span></div>
+          <div class="metrics">
+            <div class="metric"><span class="v">77.8<span class="u">%</span></span><span class="l">伏笔回收率</span></div>
+            <div class="metric"><span class="v">5<span class="u">/0</span></span><span class="l">张力峰/谷</span></div>
+            <div class="metric"><span class="v">12</span><span class="l">冲突推进</span></div>
+            <div class="metric"><span class="v">1</span><span class="l">受挫次数</span></div>
+            <div class="metric"><span class="v">91.7<span class="u">%</span></span><span class="l">指令执行率</span></div>
+          </div>
+          <div class="nicebar"><i></i></div>
+          <div class="tension">
+            <span class="tv">5/10</span>
+            <span class="beat">兑现伏笔</span>
+            <span class="spark">
+              <i style="height:8px"></i><i style="height:5px"></i><i style="height:2px"></i><i style="height:9px"></i>
+              <i style="height:13px"></i><i style="height:22px"></i><i style="height:5px"></i><i style="height:13px"></i>
+              <i style="height:17px"></i><i style="height:22px"></i>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v12H4z"/><path d="M8 20h8M12 16v4"/></svg>当前指令预览 <span class="k">· #10</span></div>
+          <div class="pre"><span class="cmd">【余波 · 本轮必须落实】</span>
+1）先补上收束锚点：机载终端落下那行流程结算『接收完成·本机已列入记录』，不解释它是什么、不作任何总结。
+2）阵列进入完全静默：每次反向探测只得到死寂或一行『链路只读』；不许出现任何回执、任何新增数据。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 13l9 5 9-5"/></svg>活跃冲突</div>
+          <div class="row">碎石带深处的定点勘测 <span class="tag">收束</span> <span class="tag warn">强度 9/10</span></div>
+          <div class="fig" style="margin-top:5px"><span>伏笔 8 条</span><span>弧线 Lim · 挣扎</span><span>核验 11/12</span></div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>跳过本幕</button>
+          <button class="btn">重新推进</button>
+          <button class="btn danger">清空账本</button>
+        </div>
+        <div class="empty"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>尚无张力历史（推进一轮后出现）</div>
+        <div class="err"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>同步编剧备忘到世界书失败：主世界书不可读，已回退聊天世界书</div>
+      </div>
+    </div>
+    <figcaption><b>C · 深空遥测</b>紫靛黑（hue 285）+ 双色强调（紫罗兰 / 冷青）；圆角较大、指标格独立成块、顶部微光条；数字等宽。<br><code>气质：现代遥测面板，戏剧感最强</code></figcaption>
+  </figure>
+
+</div>
+</body>
+</html>

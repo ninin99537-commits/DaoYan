@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>剧情导演 · 界面重做方向（三稿）</title>
+<style>
+/* =====================================================================
+   剧情导演 · 界面重做 —— 三个视觉方向的静态稿（第一步）
+   本文件的三条自我约束（对着规格 v1 的硬指标写）：
+   1. **零原生控件**：所有控件都是自绘层 —— 滑块 app/::-webkit-*/::-moz-*、
+      勾选=自绘开关(appearance:none，保 <input type=checkbox> 语义)、
+      下拉=自绘 listbox(无 <select> 默认外观)、披露=自绘(无 <summary> 三角)、
+      滚动条=::-webkit-scrollbar + scrollbar-width/color、::selection、全局 :focus-visible 光环。
+   2. **令牌唯一**：颜色/字体/间距全走 CSS 变量(将来一一对应 主题.ts 的 --dj-* 派生)，
+      正文里不写一个硬编码色值形状的"魔法色"(仅画布背景允许)。
+   3. **布局只用 in-flow**：面板内**没有** position:absolute（下拉列表是"就地展开"而非浮层
+      —— 既守住"不新增 absolute"的契约，又不会被 460px 的小面板裁掉）。
+   ===================================================================== */
+
+/* ---------- 画布(不属于任何方向, 只是把三稿摆在桌上) ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:#0e0c0a;color:#d8cfc2;padding:26px 28px 60px;
+  font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:13px;line-height:1.6;
+}
+.page-head{max-width:1520px;margin:0 auto 20px}
+.page-head h1{font-family:"Source Han Serif SC","Noto Serif SC",SimSun,serif;font-size:21px;font-weight:600;letter-spacing:.6px;margin:0 0 8px;color:#f0e7da}
+.page-head p{margin:4px 0;color:#9c9083;font-size:12.5px}
+.page-head .kbd{display:inline-block;padding:0 5px;border:1px solid #4a4238;border-radius:2px;background:#1b1815;color:#c9bdae;font-family:ui-monospace,Consolas,monospace;font-size:11px}
+.sec-title{max-width:1520px;margin:30px auto 12px;font-family:"Source Han Serif SC",SimSun,serif;font-size:15px;color:#e6dccd;letter-spacing:.4px}
+.sec-title span{color:#7d7264;font-family:"Segoe UI",sans-serif;font-size:12px;margin-left:8px;letter-spacing:0}
+.row{max-width:1520px;margin:0 auto;display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+
+/* =====================================================================
+   方向令牌。三稿都守"暖墨 + 唯一朱红 + 2px 圆角"(规格 §1.2 第 9 条),
+   差异做在**材质 / 密度 / 字体 / 控件形态**上 —— 那才是"丑不丑"的来源。
+   ===================================================================== */
+.dir{--r:2px;--dur:.15s;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s6:24px;
+     --body:"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+     --num:ui-monospace,"Cascadia Mono",Consolas,monospace;
+     --serif:"Source Han Serif SC","Noto Serif SC",SimSun,serif;}
+
+/* A · 排练厅手稿：暖纸 + 文具实体感（衬线、纸纹、印章式强调、留白大） */
+.dirA{--bg:oklch(.175 .009 62);--panel:oklch(.215 .010 62);--raise:oklch(.245 .011 62);--hover:oklch(.29 .012 62);
+  --line:oklch(.305 .011 62);--line2:oklch(.405 .013 62);
+  --ink:oklch(.905 .012 75);--ink2:oklch(.735 .014 75);--ink3:oklch(.59 .014 75);--ink4:oklch(.475 .012 66);
+  --seal:oklch(.58 .19 28);--sealSoft:oklch(.30 .06 28);--selFg:oklch(.97 .01 60);
+  --gold:oklch(.74 .10 85);--good:oklch(.70 .09 148);
+  --paper:repeating-linear-gradient(180deg,oklch(.99 0 0/.014) 0 1px,transparent 1px 4px);
+  --ctlTrack:oklch(.28 .010 62);--ctlKnob:oklch(.93 .012 75);--ctlTrackOn:oklch(.34 .07 28);
+  --title:var(--serif);--titleSize:17px;--labelSpacing:.5px}
+
+/* B · 机库仪表：工业铭牌 + 刻度（等宽数字、密度高、机械拨片、角标） */
+.dirB{--bg:oklch(.165 .007 70);--panel:oklch(.205 .008 70);--raise:oklch(.232 .009 70);--hover:oklch(.275 .010 70);
+  --line:oklch(.295 .009 70);--line2:oklch(.415 .011 70);
+  --ink:oklch(.895 .010 78);--ink2:oklch(.70 .012 78);--ink3:oklch(.565 .012 78);--ink4:oklch(.45 .010 70);
+  --seal:oklch(.575 .185 28);--sealSoft:oklch(.285 .055 28);--selFg:oklch(.97 .01 60);
+  --gold:oklch(.75 .105 88);--good:oklch(.72 .095 150);
+  --paper:repeating-linear-gradient(90deg,oklch(.99 0 0/.022) 0 1px,transparent 1px 6px);
+  --ctlTrack:oklch(.26 .008 70);--ctlKnob:oklch(.86 .010 78);--ctlTrackOn:oklch(.33 .065 28);
+  --title:var(--num);--titleSize:15px;--labelSpacing:1.1px}
+
+/* C · 夜航终端：暗玻璃 + 光带（高对比细线、光珠、点阵 LED、留白克制） */
+.dirC{--bg:oklch(.145 .011 55);--panel:oklch(.185 .013 55);--raise:oklch(.215 .014 55);--hover:oklch(.265 .016 55);
+  --line:oklch(.30 .014 55);--line2:oklch(.44 .016 55);
+  --ink:oklch(.925 .010 80);--ink2:oklch(.755 .013 80);--ink3:oklch(.60 .014 80);--ink4:oklch(.48 .012 70);
+  --seal:oklch(.60 .195 28);--sealSoft:oklch(.31 .07 28);--selFg:oklch(.98 .01 60);
+  --gold:oklch(.76 .11 88);--good:oklch(.74 .10 152);
+  --paper:linear-gradient(180deg,oklch(.99 0 0/.03),transparent 42%);
+  --ctlTrack:oklch(.25 .012 55);--ctlKnob:oklch(.96 .012 80);--ctlTrackOn:oklch(.36 .08 28);
+  --title:var(--body);--titleSize:15.5px;--labelSpacing:.3px}
+
+/* =====================================================================
+   面板骨架（460×620 名义上限 —— 与插件 面板机制.ts 的契约同尺寸）
+   ===================================================================== */
+.panel{
+  width:460px;height:620px;flex:none;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--panel);background-image:var(--paper);
+  border:1px solid var(--line);border-radius:var(--r);color:var(--ink);
+  font-family:var(--body);font-size:12.5px;line-height:1.55;
+  box-shadow:0 22px 50px oklch(0 0 0/.55);
+}
+.dirB .panel{box-shadow:0 22px 50px oklch(0 0 0/.6),inset 0 0 0 1px oklch(.99 0 0/.02)}
+.dirC .panel{box-shadow:0 26px 60px oklch(0 0 0/.62),inset 0 1px 0 oklch(.99 0 0/.05)}
+
+/* 页头 */
+.p-head{display:flex;align-items:center;gap:var(--s2);padding:11px 14px;border-bottom:1px solid var(--line);background:var(--raise)}
+.p-title{font-family:var(--title);font-size:var(--titleSize);letter-spacing:var(--labelSpacing);color:var(--ink);font-weight:600}
+.dirB .p-title{text-transform:uppercase}
+.p-sub{flex:1;color:var(--ink3);font-size:10.5px;letter-spacing:.2px}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;
+  background:none;border:1px solid transparent;border-radius:var(--r);color:var(--ink2);cursor:pointer;transition:color var(--dur),border-color var(--dur)}
+.iconbtn:hover{color:var(--ink);border-color:var(--line2)}
+
+/* 页签：选中态只有一道朱红下划线（沿风格 B 的判定，但间距/字距按方向走） */
+.p-tabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--raise)}
+.p-tabs button{position:relative;background:none;border:0;color:var(--ink2);padding:8px 12px 9px;cursor:pointer;
+  font:inherit;font-size:12.5px;letter-spacing:var(--labelSpacing);transition:color var(--dur)}
+.dirB .p-tabs button{font-family:var(--num);font-size:11.5px}
+.p-tabs button:hover{color:var(--ink)}
+.p-tabs button.on{color:var(--ink)}
+.p-tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--seal);border-radius:var(--r) var(--r) 0 0;transition:background var(--dur)}
+.p-tabs .spacer{flex:1}
+.p-tabs .tab-theme{margin-left:auto}
+
+/* 主体：唯一的滚动区(自绘滚动条) */
+.p-body{flex:1;overflow:auto;padding:var(--s3) var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
+.scroll{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.scroll::-webkit-scrollbar{width:8px;height:8px}
+.scroll::-webkit-scrollbar-track{background:transparent}
+.scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:var(--r);border:2px solid transparent;background-clip:content-box}
+.scroll::-webkit-scrollbar-thumb:hover{background:var(--ink4);background-clip:content-box}
+.panel ::selection{background:var(--seal);color:var(--selFg)}
+
+/* 层级：标题/分组/正文/说明四级 —— 字号+字重+颜色+字距同时变(规格 §1.2 第 7 条) */
+.t1{font-family:var(--title);font-size:var(--titleSize);font-weight:600;letter-spacing:var(--labelSpacing);color:var(--ink)}
+.t2{font-size:11.5px;font-weight:600;letter-spacing:var(--labelSpacing);color:var(--ink2);text-transform:none}
+.dirB .t2,.dirC .t2{text-transform:uppercase}
+.t3{font-size:12.5px;font-weight:400;color:var(--ink)}
+.t4{font-size:10.5px;font-weight:400;color:var(--ink3);letter-spacing:.15px}
+
+/* 卡片：层次靠左边线分级 */
+.card{border:1px solid var(--line);border-left:2px solid var(--line2);border-radius:var(--r);background:var(--raise);padding:10px 12px;
+  transition:border-color var(--dur)}
+.card.key{border-left-color:var(--seal)}
+.dirB .card{background:linear-gradient(180deg,oklch(.99 0 0/.02),transparent 40%),var(--raise)}
+.dirC .card{background:var(--raise);box-shadow:inset 0 1px 0 oklch(.99 0 0/.035)}
+.card-h{display:flex;align-items:center;gap:var(--s1);margin-bottom:var(--s2)}
+.card-h::before{content:"§";color:var(--seal);font-family:var(--serif);margin-right:2px}
+.dirB .card-h::before{content:"▤";font-family:var(--num);font-size:10px}
+.dirC .card-h::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--seal);box-shadow:0 0 6px var(--seal)}
+.card-h .k{color:var(--ink4)}
+
+/* 状态条：四态语义色 + 左侧 3px + 圆点（离线=灰、出错=朱红、运行=绿、剧终=朱红静默） */
+.status{display:flex;align-items:flex-start;gap:var(--s2);padding:7px 10px;border:1px solid var(--line);border-left-width:3px;border-radius:var(--r);background:var(--bg);font-size:11.5px}
+.status .dot{width:6px;height:6px;border-radius:50%;flex:none;margin-top:6px;background:var(--line2)}
+.status b{font-size:12px;font-weight:600}
+.status.over{border-left-color:var(--seal)}.status.over .dot{background:var(--seal)}.status.over b{color:var(--seal)}
+.status.off{border-left-color:var(--ink3)}.status.off .dot{background:var(--ink3)}
+.status.cold{border-left-color:var(--ink3)}.status.cold .dot{background:var(--ink3)}
+.status.run{border-left-color:var(--good)}.status.run .dot{background:var(--good)}.status.run b{color:var(--good)}
+.status.warn{border-left-color:var(--gold)}.status.warn .dot{background:var(--gold)}
+
+/* 指标：五列 + 等宽数字 */
+.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s1)}
+.metric{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:10px;color:var(--ink4);letter-spacing:.2px}
+.metric b{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-.2px}
+.metric em{font-style:normal;font-family:var(--num);font-variant-numeric:tabular-nums;font-size:10px;color:var(--ink3)}
+.metric .bad{color:var(--seal);text-decoration:underline dotted var(--seal)}
+.dirA .metric b{font-family:var(--serif);font-size:17px}
+
+/* 张力波形 + 条 */
+.tension{display:flex;align-items:flex-end;gap:var(--s1);height:26px;margin-top:var(--s2);border-bottom:1px solid var(--line);padding-bottom:2px}
+.tension i{display:block;width:5px;border-radius:1px 1px 0 0;background:linear-gradient(180deg,var(--gold),var(--seal))}
+.spark-note{margin-left:auto;font-family:var(--num);font-variant-numeric:tabular-nums;font-size:10px;color:var(--ink3)}
+
+/* 指令预览：衬线舞台提示 + 左朱红线 */
+.pre{white-space:pre-wrap;word-break:break-word;font-family:var(--serif);font-size:12.5px;line-height:1.75;
+  background:var(--bg);border:1px solid var(--line);border-left:2px solid var(--seal);border-radius:var(--r);padding:9px 10px;
+  font-variant-numeric:tabular-nums;color:var(--ink);max-height:132px;overflow:auto}
+.dirB .pre{font-family:var(--num);font-size:11.5px;line-height:1.8}
+.dirC .pre{font-family:var(--body)}
+
+/* 按钮：朱红**填充**全屏只有一处(主操作)；危险=朱红描边；其余中性 */
+.btnrow{display:flex;gap:var(--s1);flex-wrap:wrap;margin-top:var(--s2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:var(--raise);color:var(--ink);
+  border:1px solid var(--line2);border-radius:var(--r);cursor:pointer;font:inherit;font-size:11.5px;
+  transition:background var(--dur),border-color var(--dur),color var(--dur)}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--seal);border-color:var(--seal);color:var(--selFg);font-weight:600}
+.btn.primary:hover{background:var(--seal);filter:brightness(1.08)}
+.btn.danger{border-color:var(--seal);color:var(--seal);background:none}
+.btn.danger:hover{background:var(--sealSoft)}
+.btn:disabled{opacity:.45;cursor:default}
+.mini{padding:2px 7px;font-size:10.5px;background:none;border:1px solid var(--line);border-radius:var(--r);color:var(--ink3);cursor:pointer;transition:color var(--dur),border-color var(--dur)}
+.mini:hover{color:var(--ink);border-color:var(--line2)}
+
+/* =====================================================================
+   自绘控件层（三稿共用同一套类名，靠方向令牌换材质）—— 规格 §1.1 的六条
+   ===================================================================== */
+
+/* ① 滑块：appearance:none + 自绘轨道/已填充段/滑块 + 刻度 + 键盘/禁用/焦点环 */
+.ctl-field{display:flex;flex-direction:column;gap:var(--s1)}
+.ctl-field .lab{display:flex;align-items:baseline;gap:var(--s2)}
+.ctl-field .lab .t4{margin-left:auto;font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--ink2)}
+.ctl-range{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:none;cursor:pointer;margin:0}
+.ctl-range::-webkit-slider-runnable-track{height:3px;border-radius:var(--r);
+  background:linear-gradient(90deg,var(--seal) var(--fill,50%),var(--ctlTrack) var(--fill,50%))}
+.ctl-range::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:17px;margin-top:-7px;border-radius:var(--r);
+  background:var(--ctlKnob);border:1px solid var(--seal);box-shadow:inset 0 -3px 0 var(--sealSoft)}
+.dirB .ctl-range::-webkit-slider-thumb{width:9px;height:15px;background:var(--raise);box-shadow:inset 0 0 0 2px var(--seal),0 0 0 1px oklch(0 0 0/.4)}
+.dirC .ctl-range::-webkit-slider-thumb{width:13px;height:13px;margin-top:-5px;border-radius:50%;background:var(--ctlKnob);
+  box-shadow:0 0 8px var(--seal),inset 0 0 0 3px var(--seal)}
+.ctl-range::-moz-range-track{height:3px;border-radius:var(--r);background:var(--ctlTrack)}
+.ctl-range::-moz-range-progress{height:3px;border-radius:var(--r);background:var(--seal)}
+.ctl-range::-moz-range-thumb{width:11px;height:16px;border-radius:var(--r);background:var(--ctlKnob);border:1px solid var(--seal)}
+.ctl-range:disabled{opacity:.45;cursor:default}
+.ctl-range:focus{outline:none}
+.ctl-range:focus-visible{outline:2px solid var(--seal);outline-offset:4px;border-radius:var(--r)}
+.ctl-ticks{display:flex;justify-content:space-between;align-items:center;padding:0 2px}
+.ctl-ticks i{width:1px;height:4px;background:var(--line2)}
+.ctl-ticks b{font-size:9px;font-weight:400;color:var(--ink4);font-family:var(--num)}
+
+/* ② 开关：保 <input type=checkbox role=switch> 语义，外观全自绘（无 absolute） */
+.ctl-sw{display:flex;align-items:center;gap:var(--s2);cursor:pointer;user-select:none}
+.ctl-sw input{appearance:none;-webkit-appearance:none;width:1px;height:1px;margin:0;padding:0;border:0;opacity:0;overflow:hidden}
+.ctl-sw .sw-track{display:flex;align-items:center;flex:none;width:34px;height:18px;padding:2px;
+  background:var(--ctlTrack);border:1px solid var(--line2);border-radius:var(--r);transition:background var(--dur),border-color var(--dur)}
+.ctl-sw .sw-knob{width:12px;height:12px;background:var(--ctlKnob);border-radius:1px;transition:transform var(--dur),background var(--dur)}
+.dirC .ctl-sw .sw-knob{border-radius:50%;box-shadow:0 0 5px oklch(0 0 0/.5)}
+.ctl-sw input:checked + .sw-track{background:var(--ctlTrackOn);border-color:var(--seal)}
+.ctl-sw input:checked + .sw-track .sw-knob{transform:translateX(16px);background:var(--seal)}
+.dirC .ctl-sw input:checked + .sw-track .sw-knob{background:var(--ctlKnob);box-shadow:0 0 8px var(--seal)}
+.ctl-sw input:focus-visible + .sw-track{outline:2px solid var(--seal);outline-offset:2px}
+.ctl-sw input:disabled + .sw-track{opacity:.45}
+.ctl-sw .sw-text{font-size:11.5px;color:var(--ink)}
+.dirB .ctl-sw .sw-text{font-family:var(--num);font-size:11px}
+
+/* ③ 下拉：自绘 listbox（就地展开，不浮层、不 <select>） */
+.ctl-dd{display:flex;flex-direction:column;gap:var(--s1)}
+.ctl-dd-btn{display:flex;align-items:center;gap:var(--s2);width:100%;padding:6px 9px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--r);cursor:pointer;font:inherit;font-size:11.5px;text-align:left;
+  transition:border-color var(--dur),background var(--dur)}
+.ctl-dd-btn:hover{border-color:var(--line2);background:var(--raise)}
+.ctl-dd-btn[aria-expanded="true"]{border-color:var(--seal)}
+.ctl-dd-btn .val{flex:1;font-family:var(--num);font-variant-numeric:tabular-nums}
+.ctl-caret{width:7px;height:7px;flex:none;border-right:1.5px solid var(--ink2);border-bottom:1.5px solid var(--ink2);
+  transform:rotate(45deg) translateY(-2px);transition:transform var(--dur)}
+.ctl-dd-btn[aria-expanded="true"] .ctl-caret{transform:rotate(-135deg) translateY(-1px)}
+.ctl-dd-list{list-style:none;margin:0;padding:var(--s1);display:flex;flex-direction:column;gap:1px;
+  background:var(--raise);border:1px solid var(--seal);border-radius:var(--r)}
+.ctl-dd-list[hidden]{display:none}
+.ctl-dd-list li{padding:5px 8px;border-radius:1px;font-size:11.5px;color:var(--ink2);cursor:pointer;display:flex;align-items:center;gap:var(--s2)}
+.ctl-dd-list li:hover{background:var(--hover);color:var(--ink)}
+.ctl-dd-list li[aria-selected="true"]{color:var(--ink);background:oklch(.99 0 0/.04)}
+.ctl-dd-list li[aria-selected="true"]::before{content:"›";color:var(--seal);font-weight:700;margin-right:1px}
+.dirB .ctl-dd-list li{font-family:var(--num);font-size:11px}
+.ctl-dd-list li .hint{margin-left:auto;font-size:10px;color:var(--ink4)}
+
+/* ④ 披露：自绘（无 <summary> 三角），带 aria-expanded 与展开动效 */
+.ctl-disc{display:flex;align-items:center;gap:var(--s2);width:100%;padding:6px 0;background:none;border:0;
+  border-top:1px solid var(--line);color:var(--ink2);cursor:pointer;font:inherit;font-size:11.5px;text-align:left;
+  transition:color var(--dur)}
+.ctl-disc:hover{color:var(--ink)}
+.ctl-disc .caret{width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg) translateY(-2px);transition:transform var(--dur)}
+.ctl-disc[aria-expanded="true"] .caret{transform:rotate(-135deg) translateY(-1px)}
+.ctl-disc .n{margin-left:auto;font-family:var(--num);font-size:10px;color:var(--ink4)}
+.ctl-disc-body{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s2) 0 var(--s1);
+  max-height:0;overflow:hidden;opacity:0;transition:max-height .18s ease,opacity .18s ease}
+.ctl-disc-body.open{max-height:520px;opacity:1}
+
+/* 普通输入（也给焦点环，统一走自绘，不用浏览器蓝框） */
+.ctl-input{width:100%;padding:6px 9px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  color:var(--ink);font:inherit;font-size:12px;transition:border-color var(--dur)}
+.ctl-input::placeholder{color:var(--ink4)}
+.ctl-input:hover{border-color:var(--line2)}
+
+/* ⑤ 滚动条见 .scroll（上方）；⑥ 选区与全局焦点环 */
+.dir :focus{outline:none}
+.dir :focus-visible{outline:2px solid var(--seal);outline-offset:2px;border-radius:var(--r)}
+
+/* 说明/标签/行 */
+.hint{font-size:10.5px;color:var(--ink3);line-height:1.5}
+.rowline{display:flex;align-items:center;gap:var(--s2);font-size:11.5px;color:var(--ink2)}
+.tag{display:inline-flex;align-items:center;padding:1px 6px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--bg);color:var(--ink2);font-size:10px;font-family:var(--num)}
+.tag.warn{color:var(--gold);border-color:var(--gold)}
+.divider{height:1px;background:var(--line);margin:var(--s1) 0}
+
+/* =====================================================================
+   悬浮球（规格 §1.3 第 13–16 条）：材质 = 高光 + 内阴影 + 边缘光；五态外形/颜色/动效各不同
+   ===================================================================== */
+.orb-cell{display:flex;flex-direction:column;gap:var(--s2);align-items:center;width:150px}
+.orb{
+  position:relative;width:64px;height:64px;flex:none;padding:0;cursor:grab;
+  border:1px solid var(--line2);border-radius:50%;
+  background:radial-gradient(120% 120% at 32% 24%,oklch(.99 0 0/.16),oklch(.99 0 0/.02) 42%,transparent 60%),var(--panel);
+  box-shadow:inset 0 1px 0 oklch(.99 0 0/.28),inset 0 -8px 14px oklch(0 0 0/.55),0 6px 16px oklch(0 0 0/.5);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  transition:transform var(--dur),box-shadow var(--dur),border-color var(--dur)}
+.orb:active{cursor:grabbing;transform:scale(.96)}
+/* 球标：**画出来的标记**（内联 SVG，单色描边 1.6px，无汉字无 emoji）；颜色随态由 .orb 的 color 传下来 */
+svg.mark{width:100%;height:100%;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.orb .mark-slot{display:flex;align-items:center;justify-content:center;flex:none;width:47%;height:47%}
+.orb{color:var(--ink2)}
+.orb .ring{position:absolute;inset:3px;border-radius:50%;border:1px solid transparent}
+.dirC .orb{background:radial-gradient(120% 120% at 30% 20%,oklch(.99 0 0/.22),transparent 55%),var(--panel)}
+/* 五态 */
+/* 五态：**形态与球标都不变**，只有环/色/动效在变（球标承担身份，不承担状态） */
+.orb[data-state="待命"]{border-color:var(--line2);color:var(--ink2)}
+.orb[data-state="编排中"]{color:var(--seal);animation:orb-breathe 1.6s ease-in-out infinite}
+.orb[data-state="编排中"] .ring{border-color:transparent;border-top-color:var(--seal);
+  animation:orb-spin 1.6s linear infinite;box-shadow:0 0 10px oklch(.58 .19 28/.35)}
+.orb[data-state="出错"]{color:var(--seal);border-color:var(--seal);box-shadow:inset 0 1px 0 oklch(.99 0 0/.2),inset 0 0 0 2px var(--seal),inset 0 -8px 14px oklch(0 0 0/.5),0 0 14px oklch(.58 .19 28/.35)}
+.orb[data-state="离线"]{color:var(--ink4);border-style:dashed;border-color:var(--ink4);filter:saturate(.4)}
+.orb[data-state="剧终"]{color:var(--ink3);border-color:var(--seal);box-shadow:inset 0 1px 0 oklch(.99 0 0/.18),inset 0 0 0 2px var(--sealSoft),inset 0 0 0 3px var(--seal),0 6px 16px oklch(0 0 0/.5)}
+/* 编排中：球标"在做点什么"（不换形态）—— 场记板轻拍 / 张力弧自描 / 光圈微缩 / 刻度依次亮 */
+.orb[data-state="编排中"] svg.mark .lid{animation:mark-clap 1.6s ease-in-out infinite}
+.orb[data-state="编排中"] svg.mark .curve{stroke-dasharray:36;stroke-dashoffset:36;animation:mark-draw 1.6s ease-in-out infinite}
+.orb[data-state="编排中"] svg.mark .iris{animation:mark-iris 1.6s ease-in-out infinite}
+.orb[data-state="编排中"] svg.mark .tk{animation:mark-tick 1.6s ease-in-out infinite}
+.orb[data-state="编排中"] svg.mark .tk2{animation-delay:.18s}
+.orb[data-state="编排中"] svg.mark .tk3{animation-delay:.36s}
+@keyframes orb-spin{to{transform:rotate(360deg)}}
+@keyframes orb-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes mark-clap{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.6px)}}
+@keyframes mark-draw{0%{stroke-dashoffset:36}55%,100%{stroke-dashoffset:0}}
+@keyframes mark-iris{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.82);opacity:.72}}
+@keyframes mark-tick{0%,100%{opacity:.35}50%{opacity:1}}
+/* 悬停信息层：这是**稿子里的表达**；实现路线见 INFO(建议挂在父页面 DOM, 与 toast.ts 同机制, 免得被 40×40 iframe 裁掉) */
+.orb-wrap{position:relative;display:flex;flex-direction:column;gap:var(--s1);align-items:center}
+.orb-bubble{max-width:190px;padding:6px 9px;background:var(--raise);border:1px solid var(--line2);border-radius:var(--r);
+  box-shadow:0 8px 20px oklch(0 0 0/.5);font-size:10.5px;color:var(--ink2);line-height:1.5;text-align:left}
+.orb-bubble b{display:block;color:var(--ink);font-size:11px;margin-bottom:1px}
+.orb-bubble .t{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--ink3)}
+.orb-states{display:flex;gap:var(--s2);align-items:flex-start;flex-wrap:wrap}
+
+/* 稿子说明 */
+figcaption{max-width:460px;margin-top:var(--s2);font-size:11.5px;color:#9c9083;line-height:1.6}
+figcaption b{display:block;color:#eadfd0;font-size:13px;margin-bottom:3px;font-family:"Source Han Serif SC",SimSun,serif}
+figcaption code{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:#b8ab99}
+figure{margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>剧情导演 · 界面重做 —— 三个方向（第一步 · 静态稿）</h1>
+  <p>这一稿的重点不是配色，而是<b>控件层</b>：滑块 / 开关 / 下拉 / 披露 / 滚动条 / 选区与焦点环<b>全部自绘</b>，一个原生外观都不留。</p>
+  <p>可以动手试：<span class="kbd">拖动滑块</span> <span class="kbd">点开关</span> <span class="kbd">开下拉(↑↓/Esc/点外关)</span> <span class="kbd">展开披露</span> <span class="kbd">切页签</span> <span class="kbd">Tab 走一圈看焦点环</span> <span class="kbd">hover 悬浮球看气泡</span></p>
+  <p style="color:#7d7264">尺寸按真机契约做的：面板 <b>460×620</b>（名义上限），球 <b>40×40</b>（此处放大 1.6× 便于看材质）。三稿都守「暖墨 + 唯一朱红 + 2px 圆角」，差异在材质、密度、字体与控件形态。</p>
+  <p style="color:#7d7264">悬浮球标是<b>画出来的标记</b>（自绘 SVG · 单色描边 1.6px · 40×40 与面板内小尺寸都可辨）：<b>没有汉字、没有 emoji</b>。球标只承担身份，五态由环/色/动效表达 —— 四个方案见下方 <b>④</b>。</p>
+</div>
+
+<!-- ============================ 控件对照 ============================ -->
+<div class="sec-title" id="sec-ctl">① 控件层正面对照<span>同一个滑块/开关/下拉/披露，三种材质 —— 上一轮就是死在这一层</span></div>
+<div class="row">
+  <figure class="dir dirA">
+    <div class="card" style="width:460px">
+      <div class="card-h t2">A · 排练厅手稿<span class="k">控件样张</span></div>
+      <div class="ctl-field">
+        <span class="lab t4">戏剧强度档位<span id="a-val">3 · 跌宕起伏</span></span>
+        <input class="ctl-range" type="range" min="1" max="4" step="1" value="3" style="--fill:66%" data-out="#a-val" data-labels="1 · 轻松日常|2 · 平稳叙事|3 · 跌宕起伏|4 · 残酷">
+        <span class="ctl-ticks"><i></i><b>1</b><i></i><b>2</b><i></i><b>3</b><i></i><b>4</b><i></i></span>
+      </div>
+      <div class="divider"></div>
+      <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">自动接管</span></label>
+      <div class="divider"></div>
+      <div class="ctl-dd">
+        <span class="t4">提示条</span>
+        <button class="ctl-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="val">完成与异常</span><span class="ctl-caret"></span></button>
+        <ul class="ctl-dd-list" role="listbox" hidden>
+          <li role="option">全部（含开始）<span class="hint">每轮 2 条</span></li>
+          <li role="option" aria-selected="true">完成与异常<span class="hint">默认</span></li>
+          <li role="option">仅异常</li>
+          <li role="option">关闭<span class="hint">球仍工作</span></li>
+        </ul>
+      </div>
+      <div class="divider"></div>
+      <button class="ctl-disc" aria-expanded="true"><span class="caret"></span>高级（节奏与冷启动）<span class="n">3 项</span></button>
+      <div class="ctl-disc-body open">
+        <div class="ctl-field"><span class="lab t4">接管轮数<span id="a-v2">4</span></span>
+          <input class="ctl-range" type="range" min="1" max="20" value="4" style="--fill:16%" data-out="#a-v2" data-suffix=" 轮"></div>
+        <p class="hint">前 3 轮只记账不出指令，第 4 轮起编排本幕。</p>
+      </div>
+      <div class="btnrow"><button class="btn primary">重新推进</button><button class="btn">跳过本幕</button><button class="btn danger">清空账本</button><button class="btn" disabled>推进中…</button></div>
+    </div>
+    <figcaption><b>A · 排练厅手稿</b>暖纸 + 文具实体感：衬线标题、纸面细纹、滑块是"红笔笔尖"、开关是铜拨片、下拉是活页清单、披露是折角。留白最大、最"人味"。<br><code>性格：安静、像在读一份手稿</code></figcaption>
+  </figure>
+
+  <figure class="dir dirB">
+    <div class="card" style="width:460px">
+      <div class="card-h t2">B · 机库仪表<span class="k">控件样张</span></div>
+      <div class="ctl-field">
+        <span class="lab t4">强度档位<span id="b-val">3</span></span>
+        <input class="ctl-range" type="range" min="1" max="4" step="1" value="3" style="--fill:66%" data-out="#b-val" data-suffix=" / 4">
+        <span class="ctl-ticks"><i></i><b>L1</b><i></i><b>L2</b><i></i><b>L3</b><i></i><b>L4</b><i></i></span>
+      </div>
+      <div class="divider"></div>
+      <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">自动接管</span></label>
+      <div class="divider"></div>
+      <div class="ctl-dd">
+        <span class="t4">提示条</span>
+        <button class="ctl-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="val">完成与异常</span><span class="ctl-caret"></span></button>
+        <ul class="ctl-dd-list" role="listbox" hidden>
+          <li role="option">全部（含开始）<span class="hint">2/轮</span></li>
+          <li role="option" aria-selected="true">完成与异常<span class="hint">默认</span></li>
+          <li role="option">仅异常</li>
+          <li role="option">关闭<span class="hint">球仍工作</span></li>
+        </ul>
+      </div>
+      <div class="divider"></div>
+      <button class="ctl-disc" aria-expanded="true"><span class="caret"></span>高级（节奏与冷启动）<span class="n">3 项</span></button>
+      <div class="ctl-disc-body open">
+        <div class="ctl-field"><span class="lab t4">接管轮数<span id="b-v2">4</span></span>
+          <input class="ctl-range" type="range" min="1" max="20" value="4" style="--fill:16%" data-out="#b-v2" data-suffix=" R"></div>
+        <p class="hint">前 3 轮记账，第 4 轮起下令。</p>
+      </div>
+      <div class="btnrow"><button class="btn primary">重新推进</button><button class="btn">跳过本幕</button><button class="btn danger">清空账本</button><button class="btn" disabled>推进中…</button></div>
+    </div>
+    <figcaption><b>B · 机库仪表</b>工业铭牌味：等宽数字、L1–L4 刻度、机械拨片开关、角标与刻线；信息密度最高但靠刻度对齐不显乱。<br><code>性格：像一台在待命的机器</code></figcaption>
+  </figure>
+
+  <figure class="dir dirC">
+    <div class="card" style="width:460px">
+      <div class="card-h t2">C · 夜航终端<span class="k">控件样张</span></div>
+      <div class="ctl-field">
+        <span class="lab t4">戏剧强度档位<span id="c-val">3 · 跌宕起伏</span></span>
+        <input class="ctl-range" type="range" min="1" max="4" step="1" value="3" style="--fill:66%" data-out="#c-val" data-labels="1 · 轻松日常|2 · 平稳叙事|3 · 跌宕起伏|4 · 残酷">
+        <span class="ctl-ticks"><i></i><b>1</b><i></i><b>2</b><i></i><b>3</b><i></i><b>4</b><i></i></span>
+      </div>
+      <div class="divider"></div>
+      <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">自动接管</span></label>
+      <div class="divider"></div>
+      <div class="ctl-dd">
+        <span class="t4">提示条</span>
+        <button class="ctl-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="val">完成与异常</span><span class="ctl-caret"></span></button>
+        <ul class="ctl-dd-list" role="listbox" hidden>
+          <li role="option">全部（含开始）<span class="hint">2/轮</span></li>
+          <li role="option" aria-selected="true">完成与异常<span class="hint">默认</span></li>
+          <li role="option">仅异常</li>
+          <li role="option">关闭<span class="hint">球仍工作</span></li>
+        </ul>
+      </div>
+      <div class="divider"></div>
+      <button class="ctl-disc" aria-expanded="true"><span class="caret"></span>高级（节奏与冷启动）<span class="n">3 项</span></button>
+      <div class="ctl-disc-body open">
+        <div class="ctl-field"><span class="lab t4">接管轮数<span id="c-v2">4</span></span>
+          <input class="ctl-range" type="range" min="1" max="20" value="4" style="--fill:16%" data-out="#c-v2" data-suffix=" 轮"></div>
+        <p class="hint">前 3 轮只记账，第 4 轮起编排本幕。</p>
+      </div>
+      <div class="btnrow"><button class="btn primary">重新推进</button><button class="btn">跳过本幕</button><button class="btn danger">清空账本</button><button class="btn" disabled>推进中…</button></div>
+    </div>
+    <figcaption><b>C · 夜航终端</b>暗玻璃 + 光带：光珠滑块、发光开关、命令面板式下拉、LED 状态点；对比最干净、最"仪表舱"。<br><code>性格：冷、静、只亮该亮的地方</code></figcaption>
+  </figure>
+</div>
+
+<!-- ============================ 完整面板 ============================ -->
+<div class="sec-title" id="sec-panels">② 完整面板（460×620，页签可点）<span>每张都带真实控件：设置页里能拖/能点/能开</span></div>
+<div class="row" id="panels"></div>
+
+<div class="sec-title" id="sec-orbs">③ 悬浮球（点名要重做）<span>材质 = 高光 + 内阴影 + 边缘光；五态靠颜色/形态/动效区分；hover 出信息气泡</span></div>
+<div class="row" id="orbs"></div>
+
+<div class="sec-title" id="sec-marks">④ 球标方案（四选一 · 全部自绘 SVG · 无汉字无 emoji）<span>球标只承担身份、不承担状态：下面每排五个球的<b>标记完全不变</b>，变的只有环/色/动效</span></div>
+<div class="row" id="marks"></div>
+
+<!-- ============================ 面板模板 ============================ -->
+<template id="tpl-panel">
+  <figure class="dir">
+    <div class="panel">
+      <div class="p-head">
+        <span class="p-title">剧情导演</span>
+        <span class="p-sub">外部编剧 · 只读观测</span>
+        <button class="iconbtn" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <nav class="p-tabs">
+        <button class="on" data-tab="本幕">本幕</button><button data-tab="账本">账本</button><button data-tab="日志">日志</button><button data-tab="设置">设置</button>
+        <span class="spacer"></span>
+        <button class="tab-theme" title="主题">☀</button>
+      </nav>
+      <main class="p-body scroll">
+        <!-- 本幕 -->
+        <section class="tabpage" data-page="本幕" style="display:flex;flex-direction:column;gap:var(--s3)">
+          <div class="status run"><span class="dot"></span><div><b>运行中</b><div class="t4">上次编排成功于 #412 楼 · 已调用引擎 18 次</div></div></div>
+          <div class="card key">
+            <div class="card-h t2">判据<span class="k">· 只读指标账</span></div>
+            <div class="metrics">
+              <span class="metric"><b>77.8%</b>伏笔回收率<em>已了结 7/9</em></span>
+              <span class="metric"><b>7/1</b>张力峰/谷<em>起伏 6 次</em></span>
+              <span class="metric"><b>12</b>冲突推进<em>2 章记账</em></span>
+              <span class="metric"><b>1</b>受挫次数</span>
+              <span class="metric"><b>91.7%</b>指令执行率<em>12 次核验</em></span>
+            </div>
+            <div class="tension">
+              <i style="height:8px"></i><i style="height:5px"></i><i style="height:2px"></i><i style="height:9px"></i><i style="height:13px"></i>
+              <i style="height:22px"></i><i style="height:5px"></i><i style="height:13px"></i><i style="height:17px"></i><i style="height:22px"></i>
+              <span class="spark-note">张力 7/10</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h t2">当前指令预览<span class="k">· #10</span></div>
+            <div class="pre">【余波 · 本轮必须落实】
+1）先补上收束锚点：机载终端落下那行流程结算『接收完成·本机已列入记录』，不解释它是什么、不作任何总结。
+2）阵列进入完全静默：每次反向探测只得到死寂或一行『链路只读』。</div>
+            <div class="btnrow"><button class="btn primary">跳过本幕</button><button class="btn">重新推进</button><button class="btn danger">清空账本</button></div>
+          </div>
+          <div class="card">
+            <div class="card-h t2">活跃冲突</div>
+            <div class="rowline">碎石带深处的定点勘测<span class="tag">收束</span><span class="tag warn">强度 9/10</span></div>
+            <p class="t4" style="margin:var(--s1) 0 0">伏笔 8 条 · 弧线 Lim · 挣扎 · 核验 11/12</p>
+          </div>
+        </section>
+        <!-- 账本 -->
+        <section class="tabpage" data-page="账本" style="display:none;flex-direction:column;gap:var(--s3)">
+          <div class="card key">
+            <div class="card-h t2">全书结算<span class="k">· 落幕那一刻的快照</span></div>
+            <div class="metrics">
+              <span class="metric"><b>77.8%</b>伏笔回收率<em>已了结 7/9</em></span>
+              <span class="metric"><b>9/1</b>张力峰/谷<em>起伏 6 次</em></span>
+              <span class="metric"><b>24</b>冲突推进<em>3 章记账</em></span>
+              <span class="metric"><b>3</b>受挫次数</span>
+              <span class="metric"><b>91.7%</b>指令执行率<em>12 次核验</em></span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h t2">伏笔账</div>
+            <div class="rowline">#3「缺角的玉佩」<span class="tag">发酵</span><span class="t4">第3章内</span></div>
+            <p class="t3" style="margin:var(--s1) 0 var(--s2)">内容：玉佩缺角处的纹路与地下阵图同源</p>
+            <div class="rowline">#5「旧契约的落款」<span class="tag">潜伏</span></div>
+            <p class="t3" style="margin:var(--s1) 0 0;cursor:pointer" title="点击临时揭示（不写盘）"><b style="color:var(--seal)">◉</b> （防剧透已折叠内容）</p>
+          </div>
+          <div class="card">
+            <div class="card-h t2">终局操作</div>
+            <p class="hint">不依赖主角死亡也能走到结局：先编排一幕收束幕，演完后由你确认落幕。</p>
+            <div class="btnrow"><button class="btn danger">做全书结算</button><button class="btn">确认剧终</button></div>
+          </div>
+        </section>
+        <!-- 日志 -->
+        <section class="tabpage" data-page="日志" style="display:none;flex-direction:column;gap:var(--s3)">
+          <div class="card">
+            <div class="card-h t2">最近一次引擎调用<span class="k">· 08:12:44</span></div>
+            <p class="t4">模型：deepseek-v4 · 楼层 #412 · 用时 48s</p>
+            <button class="ctl-disc" aria-expanded="false"><span class="caret"></span>请求内容（12.4 KB）<span class="n">展开</span></button>
+            <div class="ctl-disc-body"><div class="pre scroll" style="max-height:110px">system：…（此处是被发出去的完整请求）</div></div>
+            <button class="ctl-disc" aria-expanded="false"><span class="caret"></span>AI 输出（2.1 KB）<span class="n">展开</span></button>
+            <div class="ctl-disc-body"><div class="pre scroll" style="max-height:110px">{ "下一幕": { "节拍": "余波" } … }</div></div>
+          </div>
+          <div class="card">
+            <div class="card-h t2">控制台</div>
+            <div class="pre scroll" style="max-height:120px">[08:12:04] info [剧情导演] 开始推进 (使用最近 2 条回复)
+[08:12:44] info [剧情导演] 编排完成: 本幕节拍=余波 · 用时 48s
+[08:12:44] info [剧情导演] 全书结算：已结算 3 章 · 伏笔回收 7/9 · 张力峰 9/谷 1</div>
+            <div class="btnrow"><button class="btn">复制报错发给助手</button></div>
+          </div>
+        </section>
+        <!-- 设置 -->
+        <section class="tabpage" data-page="设置" style="display:none;flex-direction:column;gap:var(--s3)">
+          <div class="card">
+            <div class="card-h t2">导演</div>
+            <div class="ctl-field">
+              <span class="lab t4">戏剧强度档位<span class="val">3 · 跌宕起伏</span></span>
+              <input class="ctl-range" type="range" min="1" max="4" step="1" value="3" style="--fill:66%" data-out="closest .lab .val" data-labels="1 · 轻松日常|2 · 平稳叙事|3 · 跌宕起伏|4 · 残酷">
+              <span class="ctl-ticks"><i></i><b>1</b><i></i><b>2</b><i></i><b>3</b><i></i><b>4</b><i></i></span>
+            </div>
+            <div class="divider"></div>
+            <div style="display:flex;flex-direction:column;gap:var(--s2)">
+              <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">自动接管（生成前注入本幕指令）</span></label>
+              <label class="ctl-sw"><input type="checkbox" role="switch"><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">防剧透 · 折叠未引爆伏笔</span></label>
+              <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">防剧透 · 折叠章回计划</span></label>
+              <label class="ctl-sw"><input type="checkbox" role="switch" checked><span class="sw-track"><span class="sw-knob"></span></span><span class="sw-text">注入「编剧备忘」到世界书</span></label>
+            </div>
+            <div class="divider"></div>
+            <div class="ctl-dd">
+              <span class="t4">提示条</span>
+              <button class="ctl-dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="val">完成与异常</span><span class="ctl-caret"></span></button>
+              <ul class="ctl-dd-list" role="listbox" hidden>
+                <li role="option">全部（含开始）<span class="hint">每轮 2 条</span></li>
+                <li role="option" aria-selected="true">完成与异常<span class="hint">默认</span></li>
+                <li role="option">仅异常</li>
+                <li role="option">关闭<span class="hint">球仍工作</span></li>
+              </ul>
+              <p class="hint">事件用提示条、状态用悬浮球：选「关闭」只是不出声，球仍显示 编排中/出错/离线/剧终。</p>
+            </div>
+            <button class="ctl-disc" aria-expanded="false"><span class="caret"></span>高级（节奏与冷启动）<span class="n">3 项</span></button>
+            <div class="ctl-disc-body">
+              <div class="ctl-field"><span class="lab t4">接管轮数<span class="val">4 轮</span></span>
+                <input class="ctl-range" type="range" min="1" max="20" value="4" style="--fill:16%" data-out="closest .lab .val" data-suffix=" 轮"></div>
+              <div class="ctl-field"><span class="lab t4">连续高张力阈值<span class="val">3 幕</span></span>
+                <input class="ctl-range" type="range" min="1" max="10" value="3" style="--fill:22%" data-out="closest .lab .val" data-suffix=" 幕"></div>
+              <p class="hint">连续 N 幕高张力 → 强制喘息幕；连续 N 幕低张力 → 「山雨欲来」。</p>
+            </div>
+            <button class="ctl-disc" aria-expanded="false"><span class="caret"></span>接口与诊断<span class="n">4 项</span></button>
+            <div class="ctl-disc-body">
+              <div class="ctl-field"><span class="lab t4">地址</span><input class="ctl-input" placeholder="https://…（末尾自动补 /v1）" value="https://api.example.com/v1"></div>
+              <div class="ctl-field"><span class="lab t4">模型</span><input class="ctl-input" value="deepseek-v4"></div>
+              <div class="rowline"><button class="btn">测试连接</button><span class="t4">最大输出 Token 60000（不要调到 4096）</span></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <figcaption><b class="cap-name"></b><span class="cap-text"></span><br><code class="cap-code"></code></figcaption>
+  </figure>
+</template>
+
+<!-- ============================ 悬浮球模板 ============================ -->
+<template id="tpl-orbs">
+  <figure class="dir" style="width:460px">
+    <div class="card">
+      <div class="card-h t2"><span class="orb-name"></span><span class="k">· 悬浮球五态（放大 1.6×）</span></div>
+      <div class="orb-states">
+        <div class="orb-cell"><div class="orb-wrap"><button class="orb" data-state="待命"><span class="ring"></span><span class="mark-slot"></span></button>
+          <div class="orb-bubble"><b>待命</b>最近：本幕节拍=余波<br><span class="t">12 分钟前</span></div></div><span class="t4">待命</span></div>
+        <div class="orb-cell"><div class="orb-wrap"><button class="orb" data-state="编排中"><span class="ring"></span><span class="mark-slot"></span></button>
+          <div class="orb-bubble"><b>正在编排本幕…</b>已等 18s<br><span class="t">最近 2 条回复</span></div></div><span class="t4">编排中</span></div>
+        <div class="orb-cell"><div class="orb-wrap"><button class="orb" data-state="出错"><span class="ring"></span><span class="mark-slot"></span></button>
+          <div class="orb-bubble"><b>上次编排失败</b>401：密钥为空<br><span class="t">红环保持到下次成功</span></div></div><span class="t4">出错</span></div>
+        <div class="orb-cell"><div class="orb-wrap"><button class="orb" data-state="离线"><span class="ring"></span><span class="mark-slot"></span></button>
+          <div class="orb-bubble"><b>引擎已自动暂停</b>连败 3/3<br><span class="t">面板可恢复自动接管</span></div></div><span class="t4">离线</span></div>
+        <div class="orb-cell"><div class="orb-wrap"><button class="orb" data-state="剧终"><span class="ring"></span><span class="mark-slot"></span></button>
+          <div class="orb-bubble"><b>已剧终</b>不调引擎、不注入<br><span class="t">面板可清除已剧终</span></div></div><span class="t4">剧终</span></div>
+      </div>
+      <p class="hint" style="margin-top:var(--s2)">五态的气泡在这里<b>常显</b>便于一次看全；实机上只在 hover / 键盘聚焦时出现（实现建议挂父页面 DOM，与 toast.ts 同机制，避免被 40×40 的 iframe 裁掉）。</p>
+    </div>
+    <figcaption><b class="orb-name"></b><span class="orb-text"></span></figcaption>
+  </figure>
+</template>
+
+<script>
+/* ---------- ① 滑块：自绘填充段 + 读数（真控件，不是画出来的死图） ---------- */
+function syncRange(el){
+  const min=+el.min, max=+el.max, v=+el.value;
+  el.style.setProperty('--fill', ((v-min)/(max-min)*100).toFixed(1)+'%');
+  const sel=el.dataset.out||'';
+  if(!sel) return;
+  let out=null;
+  if(sel.startsWith('closest ')) out=el.closest('.ctl-field')?.querySelector('.lab .val')||el.closest('.card')?.querySelector(sel.replace('closest ',''));
+  else out=document.querySelector(sel);
+  if(!out) return;
+  const labels=(el.dataset.labels||'').split('|');
+  out.textContent=(labels[v-1]||(''+v))+(el.dataset.suffix||'');
+}
+document.addEventListener('input',e=>{ if(e.target.classList.contains('ctl-range')) syncRange(e.target); });
+document.querySelectorAll('.ctl-range').forEach(syncRange);
+
+/* ---------- ② 下拉：自绘 listbox（↑↓ 选择 / Enter 选中 / Esc 关闭 / 点外关闭） ---------- */
+function closeAllDD(except){
+  document.querySelectorAll('.ctl-dd').forEach(dd=>{
+    if(dd===except) return;
+    dd.querySelector('.ctl-dd-btn').setAttribute('aria-expanded','false');
+    dd.querySelector('.ctl-dd-list').hidden=true;
+  });
+}
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.ctl-dd-btn');
+  if(btn){
+    const dd=btn.closest('.ctl-dd'), list=dd.querySelector('.ctl-dd-list');
+    const open=btn.getAttribute('aria-expanded')==='true';
+    closeAllDD(dd);
+    btn.setAttribute('aria-expanded',open?'false':'true');
+    list.hidden=open;
+    if(!open) list.querySelector('li')?.focus?.();
+    return;
+  }
+  const li=e.target.closest('.ctl-dd-list li');
+  if(li){
+    const dd=li.closest('.ctl-dd');
+    dd.querySelectorAll('li').forEach(o=>o.setAttribute('aria-selected', o===li?'true':'false'));
+    dd.querySelector('.val').textContent=li.firstChild.textContent.trim();
+    dd.querySelector('.ctl-dd-btn').setAttribute('aria-expanded','false');
+    dd.querySelector('.ctl-dd-list').hidden=true;
+    return;
+  }
+  closeAllDD(null);
+});
+document.addEventListener('keydown',e=>{
+  const li=document.activeElement?.closest?.('.ctl-dd-list li');
+  if(li){
+    const list=li.parentElement, items=[...list.children], i=items.indexOf(li);
+    if(e.key==='ArrowDown'){ e.preventDefault(); items[Math.min(items.length-1,i+1)].focus(); }
+    if(e.key==='ArrowUp'){ e.preventDefault(); items[Math.max(0,i-1)].focus(); }
+    if(e.key==='Escape'){ e.preventDefault(); const dd=list.closest('.ctl-dd'); dd.querySelector('.ctl-dd-btn').setAttribute('aria-expanded','false'); list.hidden=true; dd.querySelector('.ctl-dd-btn').focus(); }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); li.click(); }
+    return;
+  }
+  if(e.key==='Escape') closeAllDD(null);
+});
+
+/* ---------- ③ 披露：自绘箭头 + 高度动效 ---------- */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.ctl-disc');
+  if(!b) return;
+  const open=b.getAttribute('aria-expanded')==='true';
+  b.setAttribute('aria-expanded',open?'false':'true');
+  const body=b.nextElementSibling;
+  if(body && body.classList.contains('ctl-disc-body')) body.classList.toggle('open',!open);
+});
+
+/* ---------- ④ 页签：每张面板各自切 ---------- */
+document.querySelectorAll('.panel').forEach(p=>{
+  p.querySelectorAll('.p-tabs button[data-tab]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      p.querySelectorAll('.p-tabs button[data-tab]').forEach(x=>x.classList.toggle('on',x===b));
+      p.querySelectorAll('.tabpage').forEach(s=>{ s.style.display = s.dataset.page===b.dataset.tab ? 'flex' : 'none'; });
+      p.querySelector('.p-body').scrollTop=0;
+    });
+  });
+});
+
+/* ---------- ⑤ 装配三张面板 + 三组球 ---------- */
+const 方向=[
+  {key:'A',cls:'dirA',name:'A · 排练厅手稿',text:' 暖纸 + 文具实体感：滑块是红笔笔尖、开关是铜拨片、下拉是活页清单、披露是折角。留白最大。',code:'性格：安静、像在读一份手稿',orb:'A · 手稿球：哑光纸球 + 朱红印泥点；五态靠印色/虚线/静默区分 · 球标：场记板'},
+  {key:'B',cls:'dirB',name:'B · 机库仪表',text:' 工业铭牌味：等宽数字、L1–L4 刻度、机械拨片开关、角标刻线。密度最高但靠刻度对齐。',code:'性格：像一台在待命的机器',orb:'B · 仪表球：金属球 + 刻线环；五态靠刻线/拨片位置/指示灯区分 · 球标：场次刻度'},
+  {key:'C',cls:'dirC',name:'C · 夜航终端',text:' 暗玻璃 + 光带：光珠滑块、发光开关、命令面板式下拉、LED 状态点。最干净。',code:'性格：冷、静、只亮该亮的地方',orb:'C · 终端球：玻璃球 + 光带环；五态靠光色/呼吸/点阵区分 · 球标：三幕张力弧'}
+];
+/* ---------- 球标库（规格 §1.3bis：画出来的标记, 单色描边 1.6px, 无汉字无 emoji; 形态五态不变） ---------- */
+const 球标={
+  arc:'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path class="curve" d="M4 17.4c2.7 0 3.3-10.8 8-10.8s5.3 10.8 8 10.8"/><path d="M4 20.2h16" opacity=".38"/></svg>',
+  clap:'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path class="lid" d="M4 10.6h16v7.4H4z"/><path d="M4 7.4h16v3.2H4z"/><path d="M6.6 7.4 8.8 4M10.9 7.4l2.2-3.4M15.2 7.4 17.4 4"/></svg>',
+  ticks:'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path class="tk tk1" d="M7 9.4v9.2"/><path class="tk tk2" d="M12 5.4v13.2"/><path class="tk tk3" d="M17 11v7.6"/><path d="M4.6 19.2h14.8" opacity=".38"/></svg>',
+  reticle:'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 8.6v-4h4M19.4 8.6v-4h-4M4.6 15.4v4h4M19.4 15.4v4h-4"/><circle class="iris" cx="12" cy="12" r="3.4"/></svg>'
+};
+const 方向球标={dirA:'clap',dirB:'ticks',dirC:'arc'};
+const 球标说明=[
+  {k:'arc',名:'三幕张力弧',隐喻:'起—峰—落：一笔画完"这插件在干什么"，最贴功能',默认:'C · 夜航终端（也推荐给任意方向）',色:'dirC'},
+  {k:'clap',名:'场记板',隐喻:'"开拍"的那一下——外部编剧来开戏了',默认:'A · 排练厅手稿',色:'dirA'},
+  {k:'ticks',名:'场次刻度',隐喻:'三根线＝场次在推进；像仪表刻度，不是按钮',默认:'B · 机库仪表',色:'dirB'},
+  {k:'reticle',名:'取景框 / 光圈',隐喻:'"我在取景，不在演"——只读观测的立场',默认:'备选（可配任意方向）',色:'dirC'}
+];
+
+const panels=document.getElementById('panels'), orbs=document.getElementById('orbs');
+方向.forEach(d=>{
+  const pn=document.getElementById('tpl-panel').content.cloneNode(true);
+  pn.querySelector('figure').classList.add(d.cls);
+  pn.querySelector('.cap-name').textContent=d.name;
+  pn.querySelector('.cap-text').textContent=d.text;
+  pn.querySelector('.cap-code').textContent=d.code;
+  panels.appendChild(pn);
+  pn.querySelectorAll('.ctl-range').forEach(syncRange);
+
+  const ob=document.getElementById('tpl-orbs').content.cloneNode(true);
+  ob.querySelector('figure').classList.add(d.cls);
+  ob.querySelector('.orb-name').textContent=d.name.split(' · ')[0]+' · 悬浮球';
+  ob.querySelector('.orb-text').textContent=d.orb;
+  orbs.appendChild(ob);
+  ob.querySelectorAll('.ctl-range').forEach(syncRange);
+  const 本方向标=球标[方向球标[d.cls]];
+  ob.querySelectorAll('.mark-slot').forEach(slot=>{ slot.innerHTML=本方向标; });
+});
+
+/* ---------- ⑦ ④ 球标方案：每个方案一排五态（形态不变）+ 一个 40×40 实机尺寸 ---------- */
+const marks=document.getElementById('marks');
+const 五态=['待命','编排中','出错','离线','剧终'];
+球标说明.forEach(info=>{
+  const fig=document.createElement('figure'); fig.className='dir '+info.色;
+  const card=document.createElement('div'); card.className='card'; card.style.width='460px';
+  const 小球=(态,尺寸,标签,提示)=>'<div class="orb-cell" style="width:64px"><div class="orb-wrap"><button class="orb" data-state="'+态+'" style="width:'+尺寸+'px;height:'+尺寸+'px" title="'+提示+'"><span class="ring"></span><span class="mark-slot">'+球标[info.k]+'</span></button></div><span class="t4">'+标签+'</span></div>';
+  card.innerHTML='<div class="card-h t2">'+info.名+'<span class="k">· 球标方案</span></div>'
+    +'<p class="hint">'+info.隐喻+'</p>'
+    +'<div class="orb-states" style="margin-top:8px">'
+    + 小球('待命',40,'40×40 实机','实机尺寸')
+    + 五态.map(st=>小球(st,48,st,st)).join('')
+    +'</div>'
+    +'<p class="hint" style="margin-top:8px">默认配给：<b>'+info.默认+'</b>　·　形态五态不变，只有环/色/动效在变；<code>prefers-reduced-motion</code> 下全部静止。'
+    +(info.k==='arc'?'　·　<code>编排中</code>时这一笔会自描一遍（dashoffset 动画）。':'')
+    +(info.k==='clap'?'　·　<code>编排中</code>时板盖轻拍一下。':'')
+    +(info.k==='ticks'?'　·　<code>编排中</code>时三根刻度依次亮起。':'')
+    +(info.k==='reticle'?'　·　<code>编排中</code>时光圈微微收放。':'')
+    +'</p>';
+  fig.appendChild(card); marks.appendChild(fig);
+});
+
+/* ---------- ⑥ 装配完再按 hash 定位（内容是在脚本里克隆进去的, 不补这一行锚点会被顶偏） ---------- */
+if (location.hash) document.querySelector(location.hash)?.scrollIntoView({ block: 'start' });
+</script>
+</body>
+</html>
