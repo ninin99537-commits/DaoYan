@@ -2,53 +2,19 @@
 // 慢 API 只在这条由 MESSAGE_RECEIVED 触发的异步路径里跑; 生成前注入(GENERATION_AFTER_COMMANDS)
 // 只读内存里已就绪的指令, 绝不在这里之外的地方等模型。
 import { chatCompletion, maskBaseUrl, 诊断接口配置 } from './api';
-import { buildDirectorMessages } from './prompts';
 import { getSettings } from './settings';
 import { useDeathStore, useDebugStore, useStateStore, useUpdatingStore } from './state';
 import { loadData, discardSnapshotAt, 保存推进结果, 读离线状态, 记推进失败, 清推进失败, 熔断阈值 } from './快照';
-import { getActiveWorldbookText } from './读书';
 import { useHost } from './host';
 import { sync编剧备忘, sync本幕指令 } from './注入';
 import { toastError, toastInfo, toastSuccess, toastWarning, 设提示档位 } from './toast';
 import { 请求并校验 as 共用请求并校验 } from '../共用/模型往返';
-import { createTextFilter } from '../共用/楼层标签过滤';
 import { 解析导演载荷 } from './解析';
 import { 应用引擎输出 } from './账本数据';
 import { 构造本幕指令 } from './引擎规则';
+import { 采集本轮输入 } from './取料';
 
 let isUpdating = false;
-
-// ---------------------------------------------------------------------------
-// 楼层读取(选择发什么, 不是发了再截)
-// ---------------------------------------------------------------------------
-
-function getRecentAssistantMessages(count: number): { message_id: number; message: string }[] {
-  try {
-    const lastId = useHost().chat.lastMessageId();
-    const start = Math.max(0, lastId - count * 10);
-    const messages = useHost().chat.messages(`${start}-${lastId}`, { role: 'assistant' });
-    return messages
-      .filter(message => !message.is_hidden)
-      .slice(-count)
-      .map(message => ({ message_id: message.message_id, message: String(message.message ?? '') }));
-  } catch {
-    return [];
-  }
-}
-
-function buildLatestUserInput(replyMessageId: number, filter: (text: string) => string, replyIds: Set<number>, minId: number): string {
-  try {
-    const lastId = useHost().chat.lastMessageId();
-    const start = Math.max(0, Math.min(replyMessageId, lastId) - 4);
-    const messages = useHost()
-      .chat.messages(`${start}-${lastId}`)
-      .filter(message => message.role === 'user' && !message.is_hidden && message.message_id > minId && !replyIds.has(message.message_id))
-      .slice(-1);
-    return messages.map(message => filter(message.message ?? '')).join('\n\n');
-  } catch {
-    return '';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // 校验(不合格则带着错误原因重试)
@@ -117,51 +83,14 @@ export async function updateDirector(force = false): Promise<void> {
       else console.info('[剧情导演] 已剧终, 自动路径整体跳过(不调引擎、不注入)');
       return;
     }
-    let playerName: string | null = null;
-    let playerDesc = '';
-    try {
-      playerName = useHost().persona.name();
-      playerDesc = useHost().persona.description().trim();
-    } catch {
-      playerName = null;
-      playerDesc = '';
-    }
-    const recentCount = Math.max(1, settings.导演.读取最近回复数 ?? 3);
-    const clearLayer = data.清空层 ?? 0;
-    let recent = getRecentAssistantMessages(recentCount);
-    if (!force) recent = recent.filter(message => message.message_id > clearLayer);
-    if (recent.length === 0) {
+    // 取料已独立成 module(候选三): 读哪几层楼 / 怎么过滤 / 拼什么消息 都在 取料.ts
+    const 取 = await 采集本轮输入(data, settings, force);
+    if (!取.成功) {
       if (force) toastWarning('剧情导演: 没有可分析的AI回复(请确认已生成至少一条AI回复)', '剧情导演');
       else console.warn('[剧情导演] 未找到新的AI回复(清空后或仅剩旧楼层), 跳过本次推进');
       return;
     }
-    const filter = createTextFilter(settings.标签);
-    const reply = recent
-      .map((message, index) => `【${index === recent.length - 1 ? '最新回复' : `较早回复 ${index + 1}`}】\n${filter(message.message)}`)
-      .join('\n\n');
-    const replyIds = new Set(recent.map(message => message.message_id));
-    const context = buildLatestUserInput(recent[recent.length - 1].message_id, filter, replyIds, force ? 0 : clearLayer);
-    const worldbook = settings.导演.读取世界书
-      ? await getActiveWorldbookText([context, reply].filter(Boolean).join('\n\n'), {
-          excludeNames: settings.导演.世界书排除 ?? [],
-          includeGlobal: settings.导演.读取全局世界书,
-        })
-      : '';
-    const messages = buildDirectorMessages({
-      账本: data,
-      reply,
-      replyCount: recent.length,
-      context,
-      worldbook,
-      playerName,
-      playerDesc,
-      死亡抉择: data.死亡抉择,
-      破限: settings.导演.破限,
-      头部填充: settings.导演.头部填充,
-      头部填充文本: settings.导演.头部填充文本 ?? '',
-      防截断: settings.导演.防截断,
-      预填充: settings.导演.预填充,
-    });
+    const { recent, reply, messages } = 取.输入;
     debugStore.record({
       time: Date.now(),
       model: settings.接口.模型,
