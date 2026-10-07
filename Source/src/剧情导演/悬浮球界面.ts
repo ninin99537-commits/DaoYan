@@ -36,7 +36,10 @@ $(() => {
       border: 'none',
       outline: 'none',
       boxShadow: 'none',
-      pointerEvents: 'auto',
+      // 挂载成功前绝不吃指针事件。这个壳一插进 DOM 就停在 [0,0] 且 40×40；
+      // 若 setup 抛错（真机事故：useStateStore 未定义），onMounted 永不执行、位置永不迁走，
+      // 它就会把左上角全部指针事件吃掉，压住别的插件（彼方、玉子手机都中过招）。
+      pointerEvents: 'none',
       zIndex: String(层序.球iframe),
     })
     .appendTo('body');
@@ -45,6 +48,8 @@ $(() => {
     if (!nestedDoc) return;
     copyStylesTo(nestedDoc);
     app.mount(nestedDoc.body);
+    // mount 走通 ⇒ onMounted 已把球迁到右下角，此刻才接管指针事件
+    ($app[0] as HTMLIFrameElement).style.pointerEvents = 'auto';
     window.setTimeout(() => copyStylesTo(nestedDoc), 300);
     window.setTimeout(() => copyStylesTo(nestedDoc), 1200);
   });

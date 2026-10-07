@@ -24,6 +24,25 @@
   //    · 拿到 sha: 带 sha 的 CDN 地址是永久缓存、绝不串版本，国内又快，放前面；
   //    · 没拿到 sha: **raw 必须第一** —— 只缓存 5 分钟；
   //      jsdelivr 的 @master 只能垫底：缓存 7 天，会一声不响喂回几天前的旧构建（烟火就是这么翻过车的）。
+  //
+  // ⚠ raw 不能直接 import()：raw.githubusercontent.com 对 .js 返回 text/plain，
+  //   浏览器对模块脚本强制 MIME 检查，直接 import 必然报
+  //   "Failed to load module script: ... MIME type of text/plain" 并失败 ——
+  //   于是"raw 放第一"这条新鲜度设计等于白写。改法：先取文本、包成 MIME 正确的 blob 再 import。
+  //   产物内部的外部依赖都是绝对 https 地址，所以 blob 模块照样能解析它们。
+  async function 从raw导入(地址) {
+    const 响应 = await fetch(地址, { cache: 'no-store' });
+    if (!响应.ok) throw new Error(`raw ${响应.status}`);
+    const 文本 = await 响应.text();
+    const 临时 = URL.createObjectURL(new Blob([文本], { type: 'text/javascript' }));
+    try {
+      await import(临时);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(临时), 60000);
+    }
+  }
+  const 是raw = 地址 => 地址.startsWith('https://raw.githubusercontent.com/');
+
   const 戳 = `?t=${Date.now()}`;
   const 地址表 = 引用
     ? [`https://testingcf.jsdelivr.net/gh/${仓库}@${引用}/${文件}`,
@@ -37,7 +56,8 @@
   for (let 轮 = 1; 轮 <= 2 && !用了; 轮++) {
     for (const 地址 of 地址表) {
       try {
-        await import(地址);
+        if (是raw(地址)) await 从raw导入(地址);
+        else await import(地址);
         用了 = 地址;
         break;
       } catch { /* 换下一个源 */ }
