@@ -11,59 +11,12 @@ import { useHost } from './host';
 import { sync编剧备忘, sync本幕指令 } from './注入';
 import { toastError, toastInfo, toastSuccess, toastWarning, 设提示档位 } from './toast';
 import { 请求并校验 as 共用请求并校验 } from '../共用/模型往返';
+import { createTextFilter } from '../共用/楼层标签过滤';
 import { 解析导演载荷 } from './解析';
 import { 应用引擎输出 } from './账本数据';
 import { 构造本幕指令 } from './引擎规则';
 
 let isUpdating = false;
-
-// ---------------------------------------------------------------------------
-// 楼层标签过滤(与彼方/烟火同款)
-// ---------------------------------------------------------------------------
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-function stripTagContent(text: string, tag: string): string {
-  const escaped = escapeRegExp(tag);
-  const boundary = '(?![a-zA-Z0-9_-])';
-  let result = text.replace(new RegExp(`<${escaped}${boundary}[^>]*>[\\s\\S]*?<\\/${escaped}>`, 'gi'), '');
-  result = result.replace(new RegExp(`<${escaped}${boundary}[^>]*\\/?>`, 'gi'), '');
-  return result;
-}
-function extractTagContent(text: string, tag: string): string[] {
-  const escaped = escapeRegExp(tag);
-  const boundary = '(?![a-zA-Z0-9_-])';
-  const matches: string[] = [];
-  const re = new RegExp(`<${escaped}${boundary}[^>]*>([\\s\\S]*?)<\\/${escaped}>`, 'gi');
-  for (const match of text.matchAll(re)) matches.push(match[1].trim());
-  return matches;
-}
-function stripLoneClosingBlocks(text: string, tag: string): string {
-  const escaped = escapeRegExp(tag);
-  const boundary = '(?![a-zA-Z0-9_-])';
-  return text.replace(new RegExp(`</${escaped}${boundary}[^>]*>`, 'gi'), '');
-}
-interface TagFilterSettings {
-  模式: '排除' | '只读';
-  列表: string[];
-}
-function createTextFilter(settings: TagFilterSettings): (text: string) => string {
-  const tags = (settings.列表 ?? []).map(tag => tag.trim().replace(/^<|>$/g, '')).filter(Boolean);
-  const stripComments = (text: string) =>
-    text
-      .replace(/<!--\s*begin_of_[a-zA-Z0-9_\u4e00-\u9fa5]+[\s\S]*?end_of_[a-zA-Z0-9_\u4e00-\u9fa5]+\s*-->/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '');
-  if (tags.length === 0) return stripComments;
-  if (settings.模式 === '只读') {
-    return text => {
-      const parts: string[] = [];
-      for (const tag of tags) parts.push(...extractTagContent(text, tag));
-      return stripComments(parts.join('\n\n') || text);
-    };
-  }
-  return text => stripComments(tags.reduce((acc, tag) => stripLoneClosingBlocks(stripTagContent(acc, tag), tag), text));
-}
 
 // ---------------------------------------------------------------------------
 // 楼层读取(选择发什么, 不是发了再截)
