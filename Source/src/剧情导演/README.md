@@ -194,6 +194,24 @@
 
 无脚本按钮——所有操作都在面板里。
 
+## 发布到 GitHub（重要 · 别忘了）
+
+本项目发布到 **`https://github.com/ninin99537-commits/DaoYan`**（别名 **DaoYan**）。用户通过 jsdelivr 直接 import 该仓库的发行产物：
+
+```
+import 'https://cdn.jsdelivr.net/gh/ninin99537-commits/DaoYan@master/dist/剧情导演/index.js';
+```
+
+**上传前**（照这三个仓库套用过的「拉到临时目录→构建→fast-forward 推送」流程）：
+1. 改动源码（`src/剧情导演/**`，涉及共用时连 `src/共用/**` 一起）。
+2. `pnpm build`，确认 `dist/剧情导演/index.js`（+ `.js.map`）重新生成、含你的改动。
+3. 提交内容 = **源码改动 + 重新构建的 `dist/剧情导演/index.js`**（这个仓库 git 跟踪 dist，jsdelivr 导入的正是它）。
+4. 推送到 `DaoYan` 的 `master`（fast-forward，一格一提交）。
+
+> ⚠️ 注意这个仓库的布局：源码在 `Source/` 下（`Source/src/剧情导演`、`Source/src/共用`），
+> 但**对外发布的 `dist/剧情导演/` 在仓库根目录**，两者不是同一路径——构建/上传前先分清。
+> 仓库没有 CI 会自动重建，所以每次改动都必须**手动重新构建并提交 dist**，否则用户拉不到最新版。
+
 ## 更新日志
 
 ## 2026-10-06 — v1.0 创建
