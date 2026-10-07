@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>剧情导演 · 架构复核 · 2026-10-07</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --panel2:#1b2029; --line:#262c37;
+    --fg:#e6e9ef; --dim:#9aa4b2; --dim2:#6f7a8a;
+    --accent:#7cc4ff; --ok:#5ad19a; --warn:#f0b45e; --bad:#ef7a7a;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#dfe3e9;
+           --fg:#1b2029; --dim:#5b6675; --dim2:#8a94a3; --accent:#0b6bcb;
+           --ok:#1a8a5a; --warn:#a86a12; --bad:#c0392b; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:36px}
+  .kicker{color:var(--accent);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+  h1{font-size:30px;line-height:1.3;margin:10px 0 6px;letter-spacing:-.01em}
+  .meta{color:var(--dim);font-size:13.5px}
+  .meta code{font-family:var(--mono);font-size:12.5px;color:var(--fg)}
+  h2{font-size:20px;margin:44px 0 14px;padding-left:12px;border-left:3px solid var(--accent)}
+  h3{font-size:15.5px;margin:26px 0 8px;color:var(--fg)}
+  p{margin:10px 0;color:var(--fg)}
+  .dim{color:var(--dim)}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{font-family:var(--mono);font-size:13px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--dim);font-weight:600;white-space:nowrap}
+  td code{font-size:12.5px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+  .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;
+    padding:2px 9px;margin-right:6px;border:1px solid transparent;white-space:nowrap}
+  .t-ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent);
+    background:color-mix(in srgb,var(--ok) 12%,transparent)}
+  .t-warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent);
+    background:color-mix(in srgb,var(--warn) 12%,transparent)}
+  .t-bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent);
+    background:color-mix(in srgb,var(--bad) 12%,transparent)}
+  .bar{display:inline-block;height:9px;border-radius:3px;background:var(--accent);
+    vertical-align:middle;margin-right:8px;opacity:.75}
+  .rule{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:6px;padding:12px 16px;margin:12px 0}
+  .rule b{color:var(--accent)}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+    color:var(--dim2);font-size:12.5px}
+  .num{font-family:var(--mono);color:var(--dim);text-align:right;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">架构复核 · Architecture Review</div>
+  <h1>剧情导演 · 模块地图与收口复核</h1>
+  <div class="meta">
+    日期 <code>2026-10-07</code> · 范围 <code>src/剧情导演/</code> + <code>src/共用/</code> ·
+    对照体例 <code>docs/彼方-架构复核-20260930.html</code>
+  </div>
+</header>
+
+<div class="card">
+  <b>一句话结论</b>
+  <p style="margin-bottom:0">
+    剧情导演的分层是成立的：平台能力全部经 <code>host.ts</code> 单一接缝，慢 API 只在
+    <code>update.ts</code> 一条异步管线里跑，账本知识集中在 <code>schema.ts</code> +
+    <code>字段表.ts</code>。本轮复核真正的问题不在分层，而在<b>三处「同一件事写了多遍」</b>：
+    标签过滤在三插件各写一份、面板改账本后的副作用链手抄八处、更新管线里取料与编排糊在一起。
+    这三处本轮已收口（①②③），另补了 DaoYan 仓库缺失的类型声明（④）。
+    剩下最大的单点是视图层 <code>悬浮球界面.vue</code>（1464 行），属可控但不轻。
+  </p>
+</div>
+
+<h2>一、模块地图</h2>
+
+<p class="dim">按「谁能碰平台、谁能碰状态、谁只算数」分层，从下往上读。</p>
+
+<h3>1. 平台接缝层</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr>
+    <td><code>host.ts</code></td><td class="num">225</td>
+    <td><b>全插件唯一直接命名酒馆助手全局的地方</b>（<code>getVariables</code> /
+        <code>getChatMessages</code> / <code>injectPrompts</code> / <code>getWorldbook</code> …）。
+        对外只暴露 <code>useHost()</code> 与一个可替换接缝，测试靠它脱开酒馆跑。</td>
+  </tr>
+</table>
+<p class="dim">
+  这条是整份复核的地基：只要「除 <code>host.ts</code> 外没有平台直连」这条可机检的不变量成立，
+  其余模块就都能在 node 里单测。仓库已把它做成用例（<code>pnpm test</code> 里会打印
+  「除 host.ts 之外的平台直连：没有 ✓」）。
+</p>
+
+<h3>2. 纯知识与规则层（不碰平台、不碰 Vue）</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr><td><code>schema.ts</code></td><td class="num">330</td><td>账本数据契约 + 枚举 + 阈值默认值 + 设置 Schema。字段含义的最终定义处。</td></tr>
+  <tr><td><code>字段表.ts</code></td><td class="num">202</td><td>「字段知识」单一来源：各层容量 / 终态 / 节拍枚举 / 淘汰优先级。<b>本轮新增 <code>是终态</code> 导出</b>。</td></tr>
+  <tr><td><code>引擎规则.ts</code></td><td class="num">190</td><td>导演引擎的代码层五条结构规则 + 本幕指令装配。纯函数。</td></tr>
+  <tr><td><code>指标.ts</code></td><td class="num">360</td><td>判据计算与终值日志行。纯函数。</td></tr>
+  <tr><td><code>解析.ts</code></td><td class="num">252</td><td>引擎返回载荷的解析（含截断判定与 JSON 片段提取）。</td></tr>
+  <tr><td><code>账本数据.ts</code></td><td class="num">117</td><td>把引擎输出「应用」回账本的纯变换。</td></tr>
+  <tr><td><code>防剧透.ts</code></td><td class="num">46</td><td>折叠口径：渲染哪段文案（<b>不改账本、不截断注入</b>）。</td></tr>
+  <tr><td><code>球状态.ts</code></td><td class="num">71</td><td>悬浮球状态机 + 悬停文案。</td></tr>
+</table>
+
+<h3>3. 状态与持久化层</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr><td><code>state.ts</code></td><td class="num">126</td><td>pinia store：内存里的账本 + 若干 UI 开关。</td></tr>
+  <tr><td><code>快照.ts</code></td><td class="num">474</td><td>楼层快照读写、删楼三场景回退、离线/熔断计数、清空层。本层最大模块。</td></tr>
+  <tr><td><code>settings.ts</code></td><td class="num">162</td><td>全局设置读写 + 读缓存 + 立即落盘。</td></tr>
+</table>
+
+<h3>4. 注入层</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr><td><code>注入.ts</code></td><td class="num">313</td><td>双层注入：事实层（世界书「编剧备忘」）+ 指令层（<code>injectPrompts</code>，生成前幂等重注）。</td></tr>
+  <tr><td><code>prompts.ts</code></td><td class="num">181</td><td>系统提示词 / 编剧备忘正文 / 本幕指令文本的拼装。</td></tr>
+  <tr><td><code>读书.ts</code></td><td class="num">107</td><td>按开关与排除表取世界书文本（发请求前的读料）。</td></tr>
+</table>
+
+<h3>5. 取料与推进管线</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr>
+    <td><code>update.ts</code></td><td class="num">234</td>
+    <td>主流程编排：守卫（接口健康/熔断/群聊/剧终）→ 取料 → 模型往返 → 应用 → 落盘 → 双层注入。
+        <b>本轮瘦身：取料整段移出。</b></td>
+  </tr>
+  <tr>
+    <td><code>取料.ts</code></td><td class="num">102</td>
+    <td><span class="tag t-ok">本轮新增</span>采集本轮输入：读最近 N 条回复 → 清空层过滤 → 标签过滤 →
+        拼最近正文/用户输入 → 按开关读世界书 → 组提示词消息。与彼方 <code>收集本轮输入.ts</code> 同户型。</td>
+  </tr>
+  <tr><td><code>api.ts</code></td><td class="num">242</td><td>接口健康诊断、模型列表、连接测试、chatCompletion。</td></tr>
+</table>
+
+<h3>6. 视图与交互层</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr>
+    <td><code>悬浮球界面.vue</code></td><td class="num">1464</td>
+    <td>面板本体（四个 tab + 设置 + 修笔 + 死亡抉择 + 剧终出口）。<b>全插件最大单体。</b></td>
+  </tr>
+  <tr>
+    <td><code>账本变更.ts</code></td><td class="num">35</td>
+    <td><span class="tag t-ok">本轮新增</span>「改完账本」的统一副作用链：落盘 → 按需重写编剧备忘 → 按需重注本幕指令。</td>
+  </tr>
+  <tr><td><code>面板机制.ts</code></td><td class="num">449</td><td>面板打开/关闭/拖拽/记忆位置等交互机制。</td></tr>
+  <tr><td><code>悬浮球界面.ts</code></td><td class="num">52</td><td>把 .vue 挂成酒馆助手前端界面组件的入口。</td></tr>
+  <tr><td><code>球气泡.ts</code></td><td class="num">102</td><td>提示气泡的显隐与文案。</td></tr>
+  <tr><td><code>主题.ts</code></td><td class="num">168</td><td>主题变量读取（跟随酒馆明暗）。</td></tr>
+  <tr><td><code>toast.ts</code></td><td class="num">206</td><td>四档提示闸门 + 成功/警告/错误出口。</td></tr>
+</table>
+
+<h3>7. 入口与共用</h3>
+<table>
+  <tr><th>模块</th><th class="num">行</th><th>职责</th></tr>
+  <tr><td><code>index.ts</code></td><td class="num">155</td><td>事件注册（MESSAGE_RECEIVED / GENERATION_AFTER_COMMANDS / 卸载清理）。</td></tr>
+  <tr><td><code>pinia.ts</code></td><td class="num">2</td><td>store 实例的创建/复用。</td></tr>
+  <tr><td colspan="3" style="background:var(--panel2)" class="dim">src/共用/ —— 三插件共享</td></tr>
+  <tr><td><code>条目求值.ts</code></td><td class="num">576</td><td>世界书条目求值（条件/关键词/递归屏蔽）。</td></tr>
+  <tr><td><code>模型往返.ts</code></td><td class="num">179</td><td>请求→校验→按失败类别重试的通用往返。</td></tr>
+  <tr><td><code>楼层标签过滤.ts</code></td><td class="num">75</td><td><span class="tag t-ok">本轮收敛</span>楼层标签过滤：<code>createTextFilter</code>，此前三插件各写一份。</td></tr>
+</table>
+
+<h2>二、四条分层红线</h2>
+
+<div class="rule"><b>① 平台只经 host.ts。</b>
+除 <code>host.ts</code> 外任何模块不得直接命名酒馆助手全局。这条可机检（已有用例），
+是「不装酒馆也能跑测试」的前提。</div>
+
+<div class="rule"><b>② 慢 API 只在一条管线里。</b>
+<code>update.ts</code> 是唯一 await 模型的地方；<code>GENERATION_AFTER_COMMANDS</code>
+注入路径只读内存里已算好的指令，<b>绝不</b>在那里等接口。这条守的是生成不卡顿。</div>
+
+<div class="rule"><b>③ 视图只声明意图，副作用收口。</b>
+视图可以改账本字段，但「改完要做什么」（落盘 / 重写备忘 / 重注指令）必须走同一个接口，
+不允许各按钮手抄调用序列。这条是本轮新增 <code>账本变更.ts</code> 的理由。</div>
+
+<div class="rule"><b>④ 字段知识唯一来源。</b>
+「什么是终态」「每层容量多少」「节拍有哪些」只在 <code>schema.ts</code> /
+<code>字段表.ts</code> 定义一次。面板、提示词、引擎规则一律取用，不重写字面判断。</div>
+
+<h2>三、复核结论与候选</h2>
+
+<p>复核找出三类「同一件事写了多遍」，以及一处仓库自洽性缺口。五条候选与落地状态：</p>
+
+<table>
+  <tr><th style="width:52px">候选</th><th>问题</th><th>落法</th><th style="width:104px">状态</th></tr>
+  <tr>
+    <td><b>①</b></td>
+    <td>楼层标签过滤（<code>[xxx]</code> 之类的剥离规则）在三个插件里各有一份实现，
+        改一处要改三处，且已经出现细微不一致。</td>
+    <td>收敛为 <code>src/共用/楼层标签过滤.ts</code>（<code>createTextFilter</code>），三插件共用。</td>
+    <td><span class="tag t-ok">已完成</span></td>
+  </tr>
+  <tr>
+    <td><b>②</b></td>
+    <td>面板上 8 个「修账本」动作各自手抄「<code>saveData</code> → <code>sync编剧备忘</code> →
+        <code>renew本幕指令</code>」调用序列，顺序/开关/暂停标志各写各的；
+        「什么是终态」也在面板与提示词里各写一遍字面判断。</td>
+    <td>新增 <code>账本变更.ts</code>（<code>提交账本变更(账本, 设置, 副作用)</code>）收口副作用链；
+        <code>字段表.ts</code> 导出 <code>是终态</code>（章回/伏笔/冲突/弧线），面板、提示词、
+        引擎规则、指标共用同一口径。新增 18 条断言的用例钉住开关与顺序。</td>
+    <td><span class="tag t-ok">已完成</span></td>
+  </tr>
+  <tr>
+    <td><b>③</b></td>
+    <td><code>updateDirector</code> 里「取料」与「编排」糊在一段：读最近回复、清空层过滤、
+        标签过滤、拼正文、读世界书、组消息全内联，主流程难读也难单测。</td>
+    <td>取料整段移入 <code>取料.ts</code>（<code>采集本轮输入</code>），与彼方
+        <code>收集本轮输入.ts</code> 同户型；<code>updateDirector</code> 只管编排。
+        行为不变（force 仍绕过清空层、无回复仍按手动/自动分别提示）。</td>
+    <td><span class="tag t-ok">已完成</span></td>
+  </tr>
+  <tr>
+    <td><b>④</b></td>
+    <td>DaoYan 仓库 <code>Source/tsconfig.json</code> 的 <code>include</code> 里写着
+        <code>"@types"</code>，但仓库里<b>没有</b>这个目录——新克隆下来
+        <code>tsc</code>/IDE 解析不到 <code>getVariables</code> /
+        <code>getChatMessages</code> / <code>injectPrompts</code> / <code>getWorldbook</code> 这些全局。</td>
+    <td>把工作区根部 32 个声明文件（<code>function/</code> + <code>iframe/</code>）补进
+        <code>Source/@types/</code>。</td>
+    <td><span class="tag t-ok">已完成</span></td>
+  </tr>
+  <tr>
+    <td><b>⑤</b></td>
+    <td>本轮复核结论此前只存在于对话里，没有可归档、可对照的文档。</td>
+    <td>本文件。</td>
+    <td><span class="tag t-ok">本次</span></td>
+  </tr>
+</table>
+
+<h3>未采纳 / 留待需要时</h3>
+<ul>
+  <li>
+    <b>把 <code>update.ts</code> 拆成可替换的 adapter（取料 / 应用 / 落盘）。</b>
+    复核时列为候选，评估后只取了「取料」这一段（③）。再往下拆「应用 / 落盘」收益递减：
+    它们是纯变换 + 一次快照写入，边界已经清楚，拆出去只会多一层参数传递。
+  </li>
+  <li>
+    <b>把 <code>悬浮球界面.vue</code>（1464 行）按 tab 拆子组件。</b>
+    这是当前最大的单体，但它是<b>视图</b>：拆与不拆不影响可测性（逻辑该在 .ts 里的都已在了），
+    且拆动会牵动模板、样式、拖拽机制，回归面大。留待下次真要改界面结构时顺势做。
+  </li>
+  <li>
+    <b><code>快照.ts</code>（474 行）再分家。</b>
+    它同时管「楼层快照」「删楼回退」「离线熔断计数」三件事，命名已经比职责窄。
+    本轮没动，因为它的用例（删楼三场景）是全家最扎实的一块，动它要有明确理由。
+  </li>
+</ul>
+
+<h2>四、规模分布</h2>
+
+<p class="dim">行数按 <code>src/剧情导演/</code> 下 <code>.ts</code> / <code>.vue</code> 实计，不含提示词文本与 README。</p>
+
+<table>
+  <tr><th>模块</th><th class="num">行</th><th style="width:46%">占比</th></tr>
+  <tr><td><code>悬浮球界面.vue</code></td><td class="num">1464</td><td><span class="bar" style="width:100%"></span>视图层</td></tr>
+  <tr><td><code>快照.ts</code></td><td class="num">474</td><td><span class="bar" style="width:32%"></span>持久化</td></tr>
+  <tr><td><code>面板机制.ts</code></td><td class="num">449</td><td><span class="bar" style="width:31%"></span>交互机制</td></tr>
+  <tr><td><code>指标.ts</code></td><td class="num">360</td><td><span class="bar" style="width:25%"></span>纯函数</td></tr>
+  <tr><td><code>schema.ts</code></td><td class="num">330</td><td><span class="bar" style="width:23%"></span>契约</td></tr>
+  <tr><td><code>注入.ts</code></td><td class="num">313</td><td><span class="bar" style="width:21%"></span>注入</td></tr>
+  <tr><td><code>解析.ts</code></td><td class="num">252</td><td><span class="bar" style="width:17%"></span>纯函数</td></tr>
+  <tr><td><code>api.ts</code></td><td class="num">242</td><td><span class="bar" style="width:17%"></span>接口</td></tr>
+  <tr><td><code>update.ts</code></td><td class="num">234</td><td><span class="bar" style="width:16%"></span>管线</td></tr>
+  <tr><td><code>host.ts</code></td><td class="num">225</td><td><span class="bar" style="width:15%"></span>接缝</td></tr>
+  <tr><td><code>toast.ts</code></td><td class="num">206</td><td><span class="bar" style="width:14%"></span>提示</td></tr>
+  <tr><td><code>字段表.ts</code></td><td class="num">202</td><td><span class="bar" style="width:14%"></span>字段知识</td></tr>
+  <tr><td><code>引擎规则.ts</code></td><td class="num">190</td><td><span class="bar" style="width:13%"></span>纯函数</td></tr>
+  <tr><td><code>prompts.ts</code></td><td class="num">181</td><td><span class="bar" style="width:12%"></span>提示词</td></tr>
+  <tr><td><code>主题.ts</code></td><td class="num">168</td><td><span class="bar" style="width:11%"></span>视图</td></tr>
+  <tr><td><code>settings.ts</code></td><td class="num">162</td><td><span class="bar" style="width:11%"></span>设置</td></tr>
+  <tr><td><code>index.ts</code></td><td class="num">155</td><td><span class="bar" style="width:11%"></span>入口</td></tr>
+  <tr><td><code>state.ts</code></td><td class="num">126</td><td><span class="bar" style="width:9%"></span>状态</td></tr>
+  <tr><td><code>账本数据.ts</code></td><td class="num">117</td><td><span class="bar" style="width:8%"></span>纯变换</td></tr>
+  <tr><td><code>读书.ts</code></td><td class="num">107</td><td><span class="bar" style="width:7%"></span>读料</td></tr>
+  <tr><td><code>取料.ts</code></td><td class="num">102</td><td><span class="bar" style="width:7%"></span>读料</td></tr>
+  <tr><td><code>球气泡.ts</code></td><td class="num">102</td><td><span class="bar" style="width:7%"></span>视图</td></tr>
+  <tr><td><code>球状态.ts</code></td><td class="num">71</td><td><span class="bar" style="width:5%"></span>状态</td></tr>
+  <tr><td><code>悬浮球界面.ts</code></td><td class="num">52</td><td><span class="bar" style="width:4%"></span>入口</td></tr>
+  <tr><td><code>防剧透.ts</code></td><td class="num">46</td><td><span class="bar" style="width:3%"></span>口径</td></tr>
+  <tr><td><code>账本变更.ts</code></td><td class="num">35</td><td><span class="bar" style="width:2.5%"></span>收口</td></tr>
+  <tr><td><code>pinia.ts</code></td><td class="num">2</td><td><span class="bar" style="width:1%"></span>装配</td></tr>
+</table>
+
+<p>
+  分布本身说明问题所在：<b>逻辑层没有胖子</b>——最大的纯函数模块 360 行，且都是单一职责；
+  真正的大头是视图（1464）与它的机制（449）。这反过来说明分层是有效的：
+  复杂度堆在「界面」这一端，而没有渗进引擎与账本。
+</p>
+
+<h2>五、后续建议</h2>
+
+<ol>
+  <li>
+    <b>保持红线可机检。</b>「除 host.ts 外无平台直连」已有用例；
+    可再加一条同类的：「除 <code>账本变更.ts</code> 与 <code>快照.ts</code> 外，
+    视图不得直接调用 <code>sync编剧备忘</code> / <code>renew本幕指令</code>」，
+    防止副作用链日后又被抄回去。
+  </li>
+  <li>
+    <b>下次动界面结构时顺手拆 <code>悬浮球界面.vue</code>。</b>
+    不要为拆而拆；按 tab 拆成子组件时，模板/样式/拖拽一起迁，一次做完。
+  </li>
+  <li>
+    <b>新字段一律先落 <code>schema.ts</code> + <code>字段表.ts</code>。</b>
+    本轮 <code>是终态</code> 的教训是：只要允许「就地写一个字面判断」，
+    它就会在四个地方各长一遍。
+  </li>
+</ol>
+
+<footer>
+  剧情导演 · 架构复核 · 2026-10-07 ·
+  同体例对照 <code>docs/彼方-架构复核-20260930.html</code>、<code>docs/烟火-架构复核-十条细节.md</code>
+</footer>
+
+</div>
+</body>
+</html>
