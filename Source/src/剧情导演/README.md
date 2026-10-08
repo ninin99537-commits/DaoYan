@@ -415,3 +415,20 @@ import 'https://cdn.jsdelivr.net/gh/ninin99537-commits/DaoYan@master/dist/剧情
 - **重试行为不变**：仍是 3 次上限，接口错等 `2 秒 × 第几次`、结构错等 0.6 秒；`取重试理由` 与 `结构失败标签（编排失败）` 都保留，面板提示与日志标签不受影响。
 
 **验证**：`pnpm test` 44 个用例文件全绿；`pnpm build` compiled successfully；推上去的 `dist/剧情导演/index.js` 里已无回喂文案，`正在重试` 仍在。
+
+## 2026-10-09 — 收纳坞改为「坞声明契约、插件只消费」
+
+方向纠正（用户提问）：「为什么是别的插件去兼容收纳？不应该是收纳兼容别的插件嘛？」——这条成立，这轮把它翻过来。
+
+**症状**：装了「悬浮球收纳」后，弹窗/弹条落在**球原来的位置**，与用户看到的收纳条图标对不上；而且球原来那 40×40 还在**白吃点击**。
+
+**根因**（实测，非推测）：坞把球**藏起来**是给球 iframe **里面的元素**打 `data-floating-dock-hidden`（`div.dj-orb`），**不是**给 iframe 本体打，也**从不搬走 iframe** —— 所以 iframe 仍停在原地、40×40、`pointer-events:auto`。
+
+**为什么不让坞反过来搬 iframe**：iframe 是本插件自己建的，位置/尺寸由 `面板机制.applyFrame` 按「球∪面板」联合矩形自己算；坞再搬一次就是两套布局打架。⇒ **搬 iframe 的活儿归插件，坞只交出「图标在哪」。**
+
+- 坞侧（v38）：新增 `window.__floatingDockNative.api = { version, root, entryFor(键) }`。`entryFor('iframe:<script_id>')` 返回贴靠点元素（收纳中 → 栏内代理图标；折叠时 → 把手；认不到 → `null`）。
+- 插件侧：`共用/收纳坞.ts` 由 89 行收到 46 行，**只剩三个导出**（`球坞键` / `取收纳坞` / `取收纳坞入口`），全部走契约。删掉了对坞私有 DOM 的全部认知（`#floating-dock-native` / `.fd-entry` / `.fd-peek` / `__floatingDockNative.items` 结构）与死导出 `坞隐藏标记`；三个调用点一行没改。
+- **顺手修掉那 40×40 吃点击**：`面板机制` 新增 `同步球指针()` —— 被收纳且面板没开时关掉自己 iframe 的 `pointer-events`，面板一开 / 球被释放立刻还回来。坞转发点击用的是 `dispatchEvent`（不走命中测试），所以关掉指针事件不影响点坞图标打开面板。
+- 配套的坞脚本 v38 需在酒馆助手里导入；**不导入则 `api` 不存在，弹窗退回贴球本体**（即回到上面那个症状）。
+
+**验证**：`pnpm test` 44 个用例文件全绿；三个 bundle 里 `entryFor` = 1、坞 DOM 残留（`floating-dock-native|fd-entry|fd-peek`）= 0、`pointerEvents` = 1。
