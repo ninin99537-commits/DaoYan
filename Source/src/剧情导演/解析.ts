@@ -241,26 +241,16 @@ function parseModelResponse(content: string): any {
   );
 }
 
-export function extractJsonSnippet(content: string): string {
-  let text = String(content || '').trim();
-  const fence = text.match(/^```(?:json|yaml)?\s*([\s\S]*?)\s*```$/);
-  if (fence) text = fence[1].trim();
-  const candidate = sliceBalancedCandidates(text)[0];
-  if (!candidate) return '';
-  return stripThinkingFields(candidate).trim() || candidate;
-}
-
 export type 解析结果 =
-  | { 成功: true; 载荷: any; 片段: string }
-  | { 成功: false; 原因: string; 片段: string; 截断: boolean };
+  | { 成功: true; 载荷: any }
+  | { 成功: false; 原因: string; 截断: boolean };
 
-/** 唯一入口。解析成功给载荷; 失败给原因与回喂用的 JSON 片段。截断 = '{' 比 '}' 多(接口被砍在半路) */
+/** 唯一入口。解析成功给载荷; 失败给原因。截断 = '{' 比 '}' 多(接口被砍在半路) */
 export function 解析导演载荷(原始文本: string): 解析结果 {
-  const 片段 = extractJsonSnippet(原始文本);
   try {
-    return { 成功: true, 载荷: parseModelResponse(原始文本), 片段 };
+    return { 成功: true, 载荷: parseModelResponse(原始文本) };
   } catch (error) {
     const 截断 = (原始文本.match(/\{/g) ?? []).length > (原始文本.match(/\}/g) ?? []).length;
-    return { 成功: false, 原因: error instanceof Error ? error.message : String(error), 片段, 截断 };
+    return { 成功: false, 原因: error instanceof Error ? error.message : String(error), 截断 };
   }
 }

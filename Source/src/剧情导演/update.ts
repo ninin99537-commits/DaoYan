@@ -27,17 +27,6 @@ function 校验导演载荷(候选: any): any {
   return 候选;
 }
 
-function 查任务下标(messages: { role: string; content: string }[]): number {
-  const isTailKickoff = (message: { role: string; content: string }, idx: number) =>
-    idx === messages.length - 1 && message.role === 'user' && message.content === '现在, 按上述全部规则开始执行任务。';
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role !== 'user') continue;
-    if (isTailKickoff(messages[i], i)) continue;
-    return i;
-  }
-  return -1;
-}
-
 // ---------------------------------------------------------------------------
 // 主流程: 推进导演
 // ---------------------------------------------------------------------------
@@ -105,7 +94,6 @@ export async function updateDirector(force = false): Promise<void> {
     toastInfo(`外部编剧正在编排本幕…（最近 ${recent.length} 条回复）`, '剧情导演');
     const 往返 = await 共用请求并校验({
       messages,
-      找任务下标: 查任务下标,
       预填充: settings.导演.预填充,
       signal: abortSignal,
       发请求: chatCompletion,
@@ -117,7 +105,6 @@ export async function updateDirector(force = false): Promise<void> {
         throw 错;
       },
       校验: 候选 => 校验导演载荷(候选),
-      取JSON片段: content => 解析导演载荷(content).片段,
       判断错误: (error, 阶段) => {
         parseError = error;
         if (阶段 === '解析') return error.name === '截断' ? '反馈' : '致命';
