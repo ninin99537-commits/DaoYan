@@ -187,7 +187,7 @@ async function 主流程() {
   ok('默认落右下角（2048×972 下 x>1900、y>780）', /anchorX\.value = Math\.max\(CLOSED_SIZE, vw - 60\)/.test(面板源) && /anchorY\.value = Math\.max\(CLOSED_SIZE, vh - 130\)/.test(面板源));
   ok('拖动夹取与净化同口径（下界 CLOSED_SIZE）', /clamp\(startAnchorX \+ \(point\.x - startX\), CLOSED_SIZE, viewportW\(\) - CLOSED_SIZE \/ 2\)/.test(面板源));
   ok('默认落在右下角附近（vw-60 / vh-130，不是左上角）', 面板源.includes('vw - 60') && 面板源.includes('vh - 130'));
-  ok('onMounted 里先定球位再装饰（且装饰各自 try 掉）', /兜底球心\(\);\s*\n\s*applyFrame\(\);\s*\n\s*量球\(\);\s*\n\s*setToastAnchor\(球锚点\(\)\.x, 球锚点\(\)\.y\);/.test(面板源) && (面板源.match(/catch \(error\) \{/g) || []).length >= 2);
+  ok('onMounted 里先定球位再装饰（且装饰各自 try 掉）', /兜底球心\(\);\s*\n\s*applyFrame\(\);\s*\n\s*同步贴球锚点\(true\);/.test(面板源) && (面板源.match(/catch \(error\) \{/g) || []).length >= 2);
   ok('resize 会重算（球心是 computed，读的是当前视口）', 面板源.includes("addEventListener('resize', onViewportResize)") && /function 兜底球心/.test(面板源));
   ok('落盘跳过 null 字段（面板没拖过时不写 面板x/面板y:null）', /if \(panelPos\.value\) \{\s*\n\s*要存\.面板x/.test(面板源) && !/面板x: panelPos\.value\?\.x \?\? null/.test(面板源));
   // 被收纳插件搬走后仍然贴球：收纳类插件**直接改 iframe 本体的 style.left/top**、且不发任何事件,
@@ -200,9 +200,17 @@ async function 主流程() {
     /setToastAnchor\(锚\.x, 锚\.y\)/.test(面板源) &&
     /clearInterval\(量球定时器\)/.test(面板源));
   ok('球 iframe 一动就立刻重量（不等下一次轮询）', /requestAnimationFrame\(\(\) => 量球\(\)\)/.test(面板源));
-  ok('弹条也以真实矩形定位（位置与半径都从这取）',
-    /const 实 = 球矩形\.value;/.test(vueSource) &&
-    /const 半径 = 实 \? Math\.max\(实\.w, 实\.h\) \/ 2 : 悬浮球直径 \/ 2;/.test(vueSource));
+  ok('弹条也以**统一锚点**定位（位置与半径都从这取；被收纳时=坞里的图标）',
+    /const \{ x: 心x, y: 心y, r: 半径 \} = 贴球锚点\.value;/.test(vueSource) &&
+    /let left = 心x - 半径 - w - 10;/.test(vueSource));
+  // 收纳坞把球**藏起来**(visibility:hidden + data-floating-dock-hidden)却**没搬走球 iframe**,
+  // 所以只贴 iframe 会落在"球原来的位置" —— 必须认领坞里那个代理图标。
+  ok('被收纳时贴坞里的代理图标（不是隐形 iframe 的老位置）',
+    /取收纳坞入口\(parentWin\.value\?\.document, frame\.value\)/.test(面板源) &&
+    /if \(r\.width \|\| r\.height\) return \{ x: r\.left \+ r\.width \/ 2/.test(面板源));
+  ok('锚点按**值**判重: 坞拖动/折叠也能跟上（球 iframe 一动没动）',
+    /if \(!强制 && Math\.abs\(旧\.x - 锚\.x\) < 0\.5/.test(面板源));
+  ok('盯住收纳坞 + 卸载清理', /坞观察器 = new MutationObserver/.test(面板源) && /坞观察器\?\.disconnect\(\)/.test(面板源));
 }
 
 console.log(`\n结果: ${pass} 通过, ${fail} 失败`);

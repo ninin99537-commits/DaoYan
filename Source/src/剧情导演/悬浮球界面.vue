@@ -556,7 +556,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { 取根变量, 层序, 弹窗变量, 弹窗兜底配色, 取弹窗配色, 悬浮球直径 } from './主题';
+import { 取根变量, 层序, 弹窗变量, 弹窗兜底配色, 取弹窗配色 } from './主题';
 import { useSettingsStore, 立即保存设置 } from './settings';
 import {
   useConsoleStore, useDeathStore, useDebugStore, useStateStore, useUpdatingStore,
@@ -586,7 +586,7 @@ const consoleStore = useConsoleStore();
 const updatingStore = useUpdatingStore();
 const deathStore = useDeathStore();
 
-const { rootEl, panelRef, headerEl, parentWin, theme, panelOpen, orbStyle, panelStyleRef, onOrbPointerDown, onOrbClick, onPanelPointerDown, closePanel, 球心坐标, 球矩形 } = 使用面板机制();
+const { rootEl, panelRef, headerEl, parentWin, theme, panelOpen, orbStyle, panelStyleRef, onOrbPointerDown, onOrbClick, onPanelPointerDown, closePanel, 球心坐标, 贴球锚点 } = 使用面板机制();
 
 const 账本 = computed(() => stateStore.data);
 const 设置 = computed(() => settingsStore.settings);
@@ -612,9 +612,9 @@ const 更新弹条CSS =
 /**
  * 贴球左方弹出(左边放不下就弹到右边), 垂直居中对齐球。
  *
- * **真实矩形优先**: 收纳类插件是直接搬 iframe 本体的 style.left/top, 逻辑球位(球心坐标)
- * 收纳后就跟真实位置脱节了 —— 用它会把弹条弹到"球原本该在"的地方。球 iframe 的真实
- * 矩形天然跟着收纳走, 所以位置与"球半径"都从它取(半径参与贴球间距, 于是收纳缩放也跟得上)。
+ * 取点统一交给 面板机制 的 贴球锚点: **被收纳坞收走时贴坞里的代理图标**, 否则贴球 iframe 的真实矩形。
+ * 收纳后坞把球藏了却没搬走 iframe, 只贴 iframe 会落在"球原来的位置"; 图标 28×28 比球小,
+ * 半径也随它走, 所以贴球间距会跟着缩(用户要的"大小也匹配")。
  */
 function 定位更新弹条() {
   const el = 更新弹条El;
@@ -624,10 +624,7 @@ function 定位更新弹条() {
   const vh = pw.innerHeight;
   const w = el.offsetWidth || 200;
   const h = el.offsetHeight || 36;
-  const 实 = 球矩形.value;
-  const 心x = 实 ? 实.cx : 球心坐标.value.x;
-  const 心y = 实 ? 实.cy : 球心坐标.value.y;
-  const 半径 = 实 ? Math.max(实.w, 实.h) / 2 : 悬浮球直径 / 2;
+  const { x: 心x, y: 心y, r: 半径 } = 贴球锚点.value;
   let left = 心x - 半径 - w - 10;
   if (left < 8) left = 心x + 半径 + 10;
   left = Math.min(Math.max(left, 8), Math.max(8, vw - w - 8));
@@ -691,8 +688,8 @@ watch([更新中, () => updatingStore.message], ([active, message]) => {
   }
 });
 
-// 拖球、或被收纳插件搬走时, 弹条都跟随(球矩形 由 面板机制 的矩形盯守驱动)
-watch([球心坐标, 球矩形], () => {
+// 拖球、被收纳、或坞自己挪窝时, 弹条都跟随(锚点由 面板机制 的"盯球 + 盯坞"双通道驱动)
+watch(贴球锚点, () => {
   if (更新弹条El && 更新弹条El.isConnected && 更新弹条El.style.display !== 'none') 定位更新弹条();
 });
 
