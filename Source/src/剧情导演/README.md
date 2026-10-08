@@ -406,3 +406,12 @@ import 'https://cdn.jsdelivr.net/gh/ninin99537-commits/DaoYan@master/dist/剧情
    ② `面板机制` 新增 `兜底球心()`（anchor≤0 就落到右下角 `vw-60/vh-130`）并放进 `orbStyle`/`applyFrame` 的**取球位路径**；`onMounted` 改成"**先定球位 + 上屏 + 写锚点**，再各自 try 掉装饰步骤"。
 - 新断言：`tests/daoyan-controls.test.ts` ⑤（文本输入元素级接管）、`tests/daoyan-e1.test.ts` ⑦⑧（总开关清备忘的行为 + 接线）、`tests/daoyan-orb-status.test.ts` ⑩（气泡用实时球心 + 球心兜底 + 装饰 try）。
 - 门槛：`pnpm test` **41/41** · `tsc` 0 · 平台直连 0 · `.slice(` 0 · `vh` 0 · 硬编码色 0 · `absolute` 3 · 原生标签 0。
+
+## 2026-10-09 — 重试不再回喂上次输出与错误原因
+
+与彼方、烟火同一次改动（三边共用的 `Source/src/共用/模型往返.ts`）：重试时不再把上一次的坏输出与错误原因发回给 AI，改为**原样重发同一份提示词**。
+
+- 导演侧的 `查任务下标`（按硬编码收尾文案反推"任务在哪条"）与 `取JSON片段` 一并删除；解析器的 `片段` 字段也删了（它只为回喂服务）。`解析导演载荷` 的返回值从 `{ 成功, 载荷, 片段 } | { 成功: false, 原因, 片段, 截断 }` 收成 `{ 成功, 载荷 } | { 成功: false, 原因, 截断 }`。
+- **重试行为不变**：仍是 3 次上限，接口错等 `2 秒 × 第几次`、结构错等 0.6 秒；`取重试理由` 与 `结构失败标签（编排失败）` 都保留，面板提示与日志标签不受影响。
+
+**验证**：`pnpm test` 44 个用例文件全绿；`pnpm build` compiled successfully；推上去的 `dist/剧情导演/index.js` 里已无回喂文案，`正在重试` 仍在。
