@@ -187,9 +187,22 @@ async function 主流程() {
   ok('默认落右下角（2048×972 下 x>1900、y>780）', /anchorX\.value = Math\.max\(CLOSED_SIZE, vw - 60\)/.test(面板源) && /anchorY\.value = Math\.max\(CLOSED_SIZE, vh - 130\)/.test(面板源));
   ok('拖动夹取与净化同口径（下界 CLOSED_SIZE）', /clamp\(startAnchorX \+ \(point\.x - startX\), CLOSED_SIZE, viewportW\(\) - CLOSED_SIZE \/ 2\)/.test(面板源));
   ok('默认落在右下角附近（vw-60 / vh-130，不是左上角）', 面板源.includes('vw - 60') && 面板源.includes('vh - 130'));
-  ok('onMounted 里先定球位再装饰（且装饰各自 try 掉）', /兜底球心\(\);\s*\n\s*applyFrame\(\);\s*\n\s*setToastAnchor\(anchorX\.value, anchorY\.value\);/.test(面板源) && (面板源.match(/catch \(error\) \{/g) || []).length >= 2);
+  ok('onMounted 里先定球位再装饰（且装饰各自 try 掉）', /兜底球心\(\);\s*\n\s*applyFrame\(\);\s*\n\s*量球\(\);\s*\n\s*setToastAnchor\(球锚点\(\)\.x, 球锚点\(\)\.y\);/.test(面板源) && (面板源.match(/catch \(error\) \{/g) || []).length >= 2);
   ok('resize 会重算（球心是 computed，读的是当前视口）', 面板源.includes("addEventListener('resize', onViewportResize)") && /function 兜底球心/.test(面板源));
   ok('落盘跳过 null 字段（面板没拖过时不写 面板x/面板y:null）', /if \(panelPos\.value\) \{\s*\n\s*要存\.面板x/.test(面板源) && !/面板x: panelPos\.value\?\.x \?\? null/.test(面板源));
+  // 被收纳插件搬走后仍然贴球：收纳类插件**直接改 iframe 本体的 style.left/top**、且不发任何事件,
+  // 逻辑球位(anchorX/anchorY)与真实位置就此脱节 —— 贴球定位必须以 iframe 的真实矩形为准。
+  ok('贴球定位以**真实矩形**为准（收纳后仍然跟得住）',
+    /const 球矩形 = ref</.test(面板源) &&
+    /if \(实\) return \{ x: 实\.cx, y: 实\.cy, r: Math\.max\(实\.w, 实\.h\) \/ 2 \};/.test(面板源));
+  ok('矩形盯守：轮询真实矩形并把 toast 锚点跟过去',
+    /量球定时器 = window\.setInterval/.test(面板源) &&
+    /setToastAnchor\(锚\.x, 锚\.y\)/.test(面板源) &&
+    /clearInterval\(量球定时器\)/.test(面板源));
+  ok('球 iframe 一动就立刻重量（不等下一次轮询）', /requestAnimationFrame\(\(\) => 量球\(\)\)/.test(面板源));
+  ok('弹条也以真实矩形定位（位置与半径都从这取）',
+    /const 实 = 球矩形\.value;/.test(vueSource) &&
+    /const 半径 = 实 \? Math\.max\(实\.w, 实\.h\) \/ 2 : 悬浮球直径 \/ 2;/.test(vueSource));
 }
 
 console.log(`\n结果: ${pass} 通过, ${fail} 失败`);

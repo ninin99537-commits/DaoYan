@@ -115,7 +115,8 @@
             </div>
             <div class="dj-actions">
               <button class="dj-btn" :disabled="!账本.当前指令" @click="跳过本幕"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>跳过本幕</button>
-              <button class="dj-btn" :disabled="更新中" @click="手动推进">{{ 更新中 ? '推进中…' : '重新推进' }}</button>
+              <button v-if="更新中" class="dj-btn danger" title="中断本次编排, 不会写入任何数据" @click="updatingStore.cancel()">中断编排</button>
+              <button v-else class="dj-btn" @click="手动推进">重新推进</button>
               <button class="dj-btn danger" @click="清空">清空账本</button>
             </div>
           </div>
@@ -555,7 +556,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { 取根变量 } from './主题';
+import { 取根变量, 层序, 弹窗变量, 弹窗兜底配色, 取弹窗配色, 悬浮球直径 } from './主题';
 import { useSettingsStore, 立即保存设置 } from './settings';
 import {
   useConsoleStore, useDeathStore, useDebugStore, useStateStore, useUpdatingStore,
@@ -585,7 +586,7 @@ const consoleStore = useConsoleStore();
 const updatingStore = useUpdatingStore();
 const deathStore = useDeathStore();
 
-const { rootEl, panelRef, headerEl, theme, panelOpen, orbStyle, panelStyleRef, onOrbPointerDown, onOrbClick, onPanelPointerDown, closePanel, 球心坐标 } = 使用面板机制();
+const { rootEl, panelRef, headerEl, parentWin, theme, panelOpen, orbStyle, panelStyleRef, onOrbPointerDown, onOrbClick, onPanelPointerDown, closePanel, 球心坐标, 球矩形 } = 使用面板机制();
 
 const 账本 = computed(() => stateStore.data);
 const 设置 = computed(() => settingsStore.settings);
@@ -593,6 +594,112 @@ const debug = computed(() => debugStore.log);
 const 更新中 = computed(() => updatingStore.active);
 const 死亡待决 = computed(() => deathStore.pending || (!!账本.value.待决死亡 && !账本.value.死亡抉择));
 const 死亡选项: 死亡抉择[] = ['视角转移', '世界观内复活', '剧终结算'];
+
+/**
+ * 更新弹条: 贴球常驻, **中断按钮就长在里面**(与彼方/烟火同款)。
+ * 为什么不用 toast: toast 是「短暂事件」, 而编排可能跑十几秒; 且用户要能在**面板没开**时中断。
+ * 中断只 abort 请求, 不写任何数据 —— updateDirector 的 finally 负责收尾(球与面板状态照常复位)。
+ */
+const 更新弹条ID = '剧情导演_更新弹条';
+let 更新弹条El: HTMLElement | null = null;
+
+const 更新弹条CSS =
+  `position:fixed;top:0;left:0;z-index:${层序.更新弹条};display:none;align-items:center;gap:9px;padding:7px 9px 7px 15px;border-radius:999px;` +
+  `background:var(${弹窗变量.bg},${弹窗兜底配色.bg});border:1px solid var(${弹窗变量.border},${弹窗兜底配色.border});color:var(${弹窗变量.text},${弹窗兜底配色.text});` +
+  `font:12px/1.4 "Segoe UI","Microsoft YaHei",sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.45);user-select:none;white-space:nowrap;` +
+  `transform-origin:left center;animation:djPillIn .32s cubic-bezier(.34,1.56,.64,1);`;
+
+/**
+ * 贴球左方弹出(左边放不下就弹到右边), 垂直居中对齐球。
+ *
+ * **真实矩形优先**: 收纳类插件是直接搬 iframe 本体的 style.left/top, 逻辑球位(球心坐标)
+ * 收纳后就跟真实位置脱节了 —— 用它会把弹条弹到"球原本该在"的地方。球 iframe 的真实
+ * 矩形天然跟着收纳走, 所以位置与"球半径"都从它取(半径参与贴球间距, 于是收纳缩放也跟得上)。
+ */
+function 定位更新弹条() {
+  const el = 更新弹条El;
+  const pw = parentWin.value;
+  if (!el || !el.isConnected || !pw) return;
+  const vw = pw.innerWidth;
+  const vh = pw.innerHeight;
+  const w = el.offsetWidth || 200;
+  const h = el.offsetHeight || 36;
+  const 实 = 球矩形.value;
+  const 心x = 实 ? 实.cx : 球心坐标.value.x;
+  const 心y = 实 ? 实.cy : 球心坐标.value.y;
+  const 半径 = 实 ? Math.max(实.w, 实.h) / 2 : 悬浮球直径 / 2;
+  let left = 心x - 半径 - w - 10;
+  if (left < 8) left = 心x + 半径 + 10;
+  left = Math.min(Math.max(left, 8), Math.max(8, vw - w - 8));
+  const top = Math.min(Math.max(心y - h / 2, 8), Math.max(8, vh - h - 8));
+  el.style.left = `${Math.round(left)}px`;
+  el.style.top = `${Math.round(top)}px`;
+}
+
+/** 整块重建而非复用改样式: 否则 el 自身的 click 监听会每次 ensure 叠一层 */
+function 确保更新弹条(doc: Document): HTMLElement {
+  doc.getElementById(更新弹条ID)?.remove();
+  if (!doc.getElementById('dj-pill-style')) {
+    const style = doc.createElement('style');
+    style.id = 'dj-pill-style';
+    style.textContent =
+      '@keyframes dj-pill-breath{0%,100%{opacity:.35}50%{opacity:1}}' +
+      '@keyframes djPillIn{from{opacity:0;transform:translateX(14px) scale(.9)}to{opacity:1;transform:none}}';
+    doc.head.appendChild(style);
+  }
+  const el = doc.createElement('div');
+  el.id = 更新弹条ID;
+  el.style.cssText = 更新弹条CSS;
+  // 弹条不在弹窗容器里, 单独把主题变量写上去
+  const 配色 = 取弹窗配色(theme.value) as unknown as Record<string, string>;
+  for (const [键, 变量] of Object.entries(弹窗变量) as [string, string][]) {
+    if (配色[键]) el.style.setProperty(变量, 配色[键]);
+  }
+  el.innerHTML =
+    `<span style="width:7px;height:7px;border-radius:50%;background:var(${弹窗变量.accent},${弹窗兜底配色.accent});display:inline-block;animation:dj-pill-breath 1.4s ease-in-out infinite;flex:none;"></span>` +
+    `<span class="dj-pill-msg"></span>` +
+    `<button type="button" class="dj-pill-cancel" style="margin-left:2px;padding:3px 11px;border-radius:999px;border:1px solid var(${弹窗变量.accent},${弹窗兜底配色.accent});background:transparent;color:var(${弹窗变量.accent},${弹窗兜底配色.accent});font:inherit;cursor:pointer;">中断</button>`;
+  const 中断钮 = el.querySelector('.dj-pill-cancel');
+  if (中断钮) {
+    中断钮.addEventListener('click', ev => {
+      ev.stopPropagation();
+      updatingStore.cancel();
+    });
+  }
+  el.addEventListener('click', () => {
+    panelOpen.value = true;
+  });
+  doc.body.appendChild(el);
+  return el;
+}
+
+watch([更新中, () => updatingStore.message], ([active, message]) => {
+  const doc = parentWin.value?.document;
+  if (!doc) return;
+  if (active) {
+    更新弹条El = 确保更新弹条(doc);
+    const msg = 更新弹条El.querySelector('.dj-pill-msg');
+    if (msg) msg.textContent = message || '导演编排中…';
+    更新弹条El.style.display = 'flex';
+    // display 切换不会重放 CSS animation, 强制回流一次
+    更新弹条El.style.animation = 'none';
+    void 更新弹条El.offsetWidth;
+    更新弹条El.style.animation = '';
+    定位更新弹条();
+  } else if (更新弹条El && 更新弹条El.isConnected) {
+    更新弹条El.style.display = 'none';
+  }
+});
+
+// 拖球、或被收纳插件搬走时, 弹条都跟随(球矩形 由 面板机制 的矩形盯守驱动)
+watch([球心坐标, 球矩形], () => {
+  if (更新弹条El && 更新弹条El.isConnected && 更新弹条El.style.display !== 'none') 定位更新弹条();
+});
+
+onUnmounted(() => {
+  更新弹条El?.remove();
+  更新弹条El = null;
+});
 
 const 页列表 = ['本幕', '账本', '日志', '设置'] as const;
 const 当前页 = ref<'本幕' | '账本' | '日志' | '设置'>('本幕');

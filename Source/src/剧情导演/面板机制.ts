@@ -97,6 +97,38 @@ export function 使用面板机制() {
   const frame = computed<HTMLIFrameElement | null>(() => (frameWin.value?.frameElement as HTMLIFrameElement | null) ?? null);
   const parentWin = computed<Window | null>(() => frameWin.value?.parent ?? null);
 
+  /**
+   * 球 iframe 的**真实**视口矩形 —— 贴球定位(弹条/气泡/toast)的唯一锚点来源。
+   *
+   * 为什么不能只用 anchorX/anchorY: 那是本插件自己的逻辑球位, 而**收纳类插件(悬浮球收纳等)
+   * 是直接改 iframe 本体的 style.left/top**, 且不发任何事件 —— 收纳之后逻辑锚点与真实位置脱节,
+   * 弹窗会弹到"球原本应该在"的地方。iframe 的真实矩形天然跟着收纳走。
+   * 量不到(未挂载/被隐藏/零尺寸)时回 null, 调用方各自退回逻辑锚点。
+   */
+  const 球矩形 = ref<{ x: number; y: number; w: number; h: number; cx: number; cy: number } | null>(null);
+
+  /** 重新量球; 返回"是否变了"(没变就不惊动下游重排) */
+  function 量球(): boolean {
+    const el = frame.value;
+    if (!el || !el.isConnected) {
+      球矩形.value = null;
+      return false;
+    }
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) {
+      球矩形.value = null;
+      return false;
+    }
+    const 旧 = 球矩形.value;
+    if (旧 && Math.abs(旧.x - r.left) < 0.5 && Math.abs(旧.y - r.top) < 0.5 && Math.abs(旧.w - r.width) < 0.5 && Math.abs(旧.h - r.height) < 0.5) return false;
+    球矩形.value = { x: r.left, y: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    return true;
+  }
+
+  /** 矩形盯守的两个通道: 属性观察器(瞬时命中) + 慢轮询(兜底) —— 收纳类插件不发任何事件 */
+  let 量球定时器: number | null = null;
+  let 量球观察器: MutationObserver | null = null;
+
   const panelOpen = ref(false);
   const isDragging = ref(false);
   const isPanelDragging = ref(false);
@@ -145,6 +177,13 @@ export function 使用面板机制() {
 
   const anchorX = ref<number>(-100);
   const anchorY = ref<number>(-100);
+
+  /** 贴球定位的统一取点: **真实矩形优先**, 退回逻辑锚点; 半径一并给出(收纳缩放也跟得上) */
+  function 球锚点(): { x: number; y: number; r: number } {
+    const 实 = 球矩形.value;
+    if (实) return { x: 实.cx, y: 实.cy, r: Math.max(实.w, 实.h) / 2 };
+    return { x: anchorX.value, y: anchorY.value, r: CLOSED_SIZE / 2 };
+  }
   const panelPos = ref<{ x: number; y: number } | null>(null);
   let mountedDone = false;
 
@@ -300,6 +339,8 @@ export function 使用面板机制() {
   }
 
   watch([panelOpen, anchorX, anchorY, panelPos], applyFrame);
+  // iframe 一动(拖动/展开)就立刻重量真实矩形 —— 否则弹条/气泡要等下一次轮询才知道球挪了
+  watch([panelOpen, anchorX, anchorY, panelPos], () => requestAnimationFrame(() => 量球()));
   watch([anchorX, anchorY], () => persistPrefs());
   watch(theme, () => {
     persistPrefs();
@@ -432,7 +473,22 @@ export function 使用面板机制() {
     // 后者任何一步抛错都不该把球留在原点、也不该让气泡失去坐标（真机缺陷 2 + 缺陷 1 的共同根因）。
     兜底球心();
     applyFrame();
-    setToastAnchor(anchorX.value, anchorY.value);
+    量球();
+    setToastAnchor(球锚点().x, 球锚点().y);
+    // 收纳类插件直接搬 iframe 本体(改内联 left/top)、且不发任何事件 —— 只能自己盯住真实矩形。
+    // 双通道: MutationObserver 抓属性改动(命中即瞬时), 慢轮询只作兜底。
+    // **不用快轮询**: getBoundingClientRect 在脏布局上会触发整页回流, 为一次搬迁一直按秒级跑不划算。
+    const 跟球 = () => {
+      if (!量球()) return;
+      const 锚 = 球锚点();
+      setToastAnchor(锚.x, 锚.y);
+    };
+    if (!量球观察器 && typeof MutationObserver !== 'undefined') {
+      量球观察器 = new MutationObserver(跟球);
+      const 球元素 = frame.value;
+      if (球元素) 量球观察器.observe(球元素, { attributes: true, attributeFilter: ['style', 'class'] });
+    }
+    if (量球定时器 === null) 量球定时器 = window.setInterval(跟球, 2000);
     try {
       ensurePanelShadow();
     } catch (error) {
@@ -447,6 +503,10 @@ export function 使用面板机制() {
   });
   onUnmounted(() => {
     parentWin.value?.removeEventListener('resize', onViewportResize);
+    if (量球定时器 !== null) window.clearInterval(量球定时器);
+    量球定时器 = null;
+    量球观察器?.disconnect();
+    量球观察器 = null;
     removePanelShadow();
   });
 
@@ -456,6 +516,8 @@ export function 使用面板机制() {
       兜底球心();
       return { x: anchorX.value, y: anchorY.value };
     }),
+    /** 球 iframe 的真实视口矩形(收纳后仍然准) —— 弹条用它定位, 位置与半径都从这取 */
+    球矩形,
     rootEl,
     panelRef,
     headerEl,

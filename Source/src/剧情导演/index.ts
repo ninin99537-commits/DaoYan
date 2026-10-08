@@ -6,6 +6,7 @@ import { updateDirector } from './update';
 import { remove本幕指令, renew本幕指令, sync编剧备忘, sync本幕指令 } from './注入';
 import { toastWarning, 设提示档位 } from './toast';
 import { useHost } from './host';
+import { createTextFilter } from '../共用/楼层标签过滤';
 import './悬浮球界面';
 
 setActivePinia(pinia);
@@ -72,6 +73,14 @@ async function handleMessageReceived(message_id: number) {
     return;
   }
   if (!latest || latest.role !== 'assistant' || latest.is_hidden) return;
+  // 正文过短(疑似被截断/内容太少、没有足够剧情)时跳过自动推进, 避免白烧一次引擎请求。
+  // **与彼方/烟火同口径**: 用标签过滤**之后**的文本判断 —— 思维链占比高的回复用原文判断
+  // 会误以为很长, 过滤后才是真正的剧情正文; 只剔换行/制表, 保留普通空格(英文文本不被低估)。
+  const replyText = createTextFilter(settings.标签)(String(latest.message ?? '')).replace(/[\r\n\t]+/g, '').trim();
+  if (replyText.length < 500) {
+    console.warn(`[剧情导演] 最新正文回复过短(过滤后 ${replyText.length}字), 疑似被截断, 已跳过本次自动推进`);
+    return;
+  }
   const frequency = Math.max(1, settings.导演.更新频率);
   if (frequency > 1) {
     const 账本 = useStateStore().data;
